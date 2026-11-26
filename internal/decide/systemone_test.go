@@ -103,7 +103,7 @@ func TestSystemOneRequest(t *testing.T) {
 			_ = json.Unmarshal(raw, &got)
 			_, _ = w.Write([]byte(`{"model":"m","answers":{"decision":{"type":"choice","probabilities":{"safe":0.91,"ask":0.09}}}}`))
 		}))
-		decide := NewSystemOne(srv.URL+"/v1/systemone", "laya", key, nil, "test")
+		decide := NewSystemOne(srv.URL+"/v1/systemone", "laya", key, nil, nil, "test")
 		d, err := decide(context.Background(), Input{Root: "/p", Command: "go test ./...", Purpose: "Run the tests"})
 		srv.Close()
 		if err != nil || d.PSafe != 0.91 {
@@ -168,5 +168,23 @@ func TestApproveRubricIsTheOneEvaluated(t *testing.T) {
 	}
 	if b.String() != approveInstructions {
 		t.Errorf("instructions differ from the eval's:\n go: %q\npy: %q", approveInstructions, b.String())
+	}
+}
+
+// The config's headers reach the decision request after Strument's own: the
+// bearer key stays, and a configured User-Agent replaces the default.
+func TestSystemOneConfigHeaders(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{"model":"m","answers":{"decision":{"type":"choice","probabilities":{"safe":0.5,"ask":0.5}}}}`))
+	}))
+	defer srv.Close()
+	d := NewSystemOne(srv.URL, "laya", "k", map[string]string{"x-cmd-zdr": "1", "user-agent": "custom/1"}, nil, "test")
+	if _, err := d(context.Background(), Input{Command: "ls"}); err != nil {
+		t.Fatal(err)
+	}
+	if got.Get("X-Cmd-Zdr") != "1" || got.Get("User-Agent") != "custom/1" || got.Get("Authorization") != "Bearer k" {
+		t.Errorf("headers = %v", got)
 	}
 }

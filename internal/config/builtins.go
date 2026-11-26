@@ -556,6 +556,7 @@ func builtinDecisionModel(_ *starlark.Thread, b *starlark.Builtin, args starlark
 	}
 	var dialect, slug, rawURL, apiKey, proxy string
 	var threshold, timeout starlark.Value
+	var headers *starlark.Dict
 	maxInput := DecisionDefaultMaxInput
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"dialect", &dialect,
@@ -566,6 +567,7 @@ func builtinDecisionModel(_ *starlark.Thread, b *starlark.Builtin, args starlark
 		"threshold?", &threshold,
 		"timeout?", &timeout,
 		"max_input?", &maxInput,
+		"headers?", &headers,
 	); err != nil {
 		return nil, err
 	}
@@ -629,9 +631,13 @@ func builtinDecisionModel(_ *starlark.Thread, b *starlark.Builtin, args starlark
 	if maxInput < 1 || maxInput > 200_000 {
 		return nil, fmt.Errorf("decision_model: max_input %d must be at least 1 and at most 200000 characters", maxInput)
 	}
+	hdrs, err := dictToHeaders("decision_model", headers)
+	if err != nil {
+		return nil, err
+	}
 	return &decisionModelValue{d: DecisionModel{
 		Dialect: dialect, Slug: slug, URL: u.String(), APIKey: apiKey, Proxy: proxy, Threshold: t, Timeout: secs,
-		MaxInput: maxInput,
+		MaxInput: maxInput, Headers: hdrs,
 	}}, nil
 }
 

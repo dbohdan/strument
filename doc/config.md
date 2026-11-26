@@ -1475,7 +1475,7 @@ A search backend for `websearch`. `backend` is `"searxng"`, `"anysearch"`, or
 
 These parameters are keyword-only.
 
-### `decision_model(dialect, slug, *, url, api_key=None, proxy=None, threshold=0.9, timeout=10, max_input=4000)`
+### `decision_model(dialect, slug, *, url, api_key=None, proxy=None, threshold=0.9, timeout=10, max_input=4000, headers={})`
 
 A decision model for `approve_model`. It is its own type, not a `model()`:
 - A chat model's parameters don't apply to it.
@@ -1507,6 +1507,9 @@ A decision model for `approve_model`. It is its own type, not a `model()`:
   the model; a longer one is asked about unread. 4000 by default; at least 1
   and at most 200000. Set it below the window of a server that truncates
   silently.
+- **`headers`** — HTTP headers sent on every decision request, under the same
+  rules as on [`provider()`](#provideradapter--base_urlnone-api_keynone-namenone-proxynone-extra_params-headers):
+  after Strument's own, with the same headers refused.
 
 These parameters, apart from `dialect` and `slug`, are keyword-only.
 
@@ -1553,8 +1556,7 @@ Describes one API endpoint and dialect. Returns a provider value to pass to
   secret. The headers Strument sets for the request itself are refused:
   `Authorization` and `x-api-key` (set `api_key` instead), `Content-Type`,
   `Content-Length` and `Host`. A value may not contain a line break. The
-  approval model's `decision_model()` has its own endpoint and does not take
-  these.
+  approval model's `decision_model()` takes its own `headers`.
 
   Command Code's zero data retention is a header: every request either runs
   on an upstream that keeps nothing or fails with HTTP 422

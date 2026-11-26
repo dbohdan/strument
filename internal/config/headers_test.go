@@ -57,3 +57,23 @@ default = "m"
 		}
 	}
 }
+
+// decision_model() takes headers under the same rules.
+func TestDecisionModelHeaders(t *testing.T) {
+	base := `
+p = provider("openai", api_key = "k")
+models = {"m": model(p, "s")}
+default = "m"
+`
+	cfg, err := Load(harness(t, base+`approve_model = decision_model("systemone", "laya", url = "https://x.example/v1/systemone", headers = {"x-cmd-zdr": "1"})`+"\n", "", nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ApproveModel == nil || cfg.ApproveModel.Headers["x-cmd-zdr"] != "1" {
+		t.Errorf("approve_model headers = %+v", cfg.ApproveModel)
+	}
+	_, err = Load(harness(t, base+`approve_model = decision_model("systemone", "laya", url = "https://x.example/v1/systemone", headers = {"Authorization": "x"})`+"\n", "", nil))
+	if err == nil || !strings.Contains(err.Error(), "set `api_key` instead") {
+		t.Errorf("err = %v, want the reserved header refused", err)
+	}
+}

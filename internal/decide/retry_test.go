@@ -50,7 +50,7 @@ func TestDecisionRetriesTransientFailures(t *testing.T) {
 				_, _ = w.Write([]byte(okBody))
 			}))
 			defer srv.Close()
-			d, err := NewSystemOne(srv.URL, "laya", "", nil, "test")(context.Background(), Input{Command: "ls"})
+			d, err := NewSystemOne(srv.URL, "laya", "", nil, nil, "test")(context.Background(), Input{Command: "ls"})
 			if err != nil || d.PSafe != 0.91 || n.Load() != 3 {
 				t.Errorf("d=%+v err=%v after %d requests; want the decision on the third", d, err, n.Load())
 			}
@@ -68,7 +68,7 @@ func TestDecisionDoesNotRetryAnAnswer(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"bad key"}`))
 	}))
 	defer srv.Close()
-	_, err := NewSystemOne(srv.URL, "laya", "", nil, "test")(context.Background(), Input{Command: "ls"})
+	_, err := NewSystemOne(srv.URL, "laya", "", nil, nil, "test")(context.Background(), Input{Command: "ls"})
 	if err == nil || n.Load() != 1 {
 		t.Errorf("err=%v after %d requests; want an error after one", err, n.Load())
 	}
@@ -100,7 +100,7 @@ func TestDecisionHandshakeIsShort(t *testing.T) {
 	httpx.RetryDelays = nil
 	defer func() { httpx.RetryDelays = saved }()
 	start := time.Now()
-	_, err = NewSystemOne("https://"+ln.Addr().String(), "laya", "", nil, "test")(context.Background(), Input{Command: "ls"})
+	_, err = NewSystemOne("https://"+ln.Addr().String(), "laya", "", nil, nil, "test")(context.Background(), Input{Command: "ls"})
 	if took := time.Since(start); err == nil || !strings.Contains(err.Error(), "TLS handshake timeout") ||
 		took > httpx.HandshakeTimeout+2*time.Second {
 		t.Errorf("err=%v after %s", err, took)

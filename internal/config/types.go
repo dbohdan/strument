@@ -594,4 +594,6 @@ type DecisionModel struct {
 	// MaxInput is the longest command plus purpose, in characters, sent to
 	// the model; a longer one is asked about unread.
 	MaxInput int
+	// Headers are sent on every decision request, as provider() headers are.
+	Headers map[string]string
 }

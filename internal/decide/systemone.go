@@ -94,8 +94,9 @@ type systemOneResponse struct {
 
 // NewSystemOne returns a Func for an endpoint speaking TypeSafe's
 // System One schema: TypeSafe's own API, a gateway's alias of it, or a local
-// server such as Ollaya.
-func NewSystemOne(endpoint, slug, apiKey string, transport http.RoundTripper, userAgent string) Func {
+// server such as Ollaya. headers are the config's, sent after Strument's own;
+// a User-Agent among them replaces userAgent.
+func NewSystemOne(endpoint, slug, apiKey string, headers map[string]string, transport http.RoundTripper, userAgent string) Func {
 	// No client timeout: the caller's context carries the deadline, which is
 	// the configured one.
 	client := &http.Client{Transport: httpx.QuickHandshake(transport)}
@@ -113,9 +114,17 @@ func NewSystemOne(endpoint, slug, apiKey string, transport http.RoundTripper, us
 		// more than the User-Agent does. Without them OpenRouter lists the
 		// requests under "Unknown".
 		httpx.SetAppAttribution(header)
+		ua := userAgent
+		for k, v := range headers {
+			if http.CanonicalHeaderKey(k) == "User-Agent" {
+				ua = v // httpx.Post sets the user agent last
+				continue
+			}
+			header.Set(k, v)
+		}
 		// A decision is a question, so a stalled handshake or a busy service
 		// is asked again while the deadline allows.
-		reply, err := httpx.PostRetrying(ctx, 0, client, endpoint, "application/json", body, userAgent, header, maxBytes)
+		reply, err := httpx.PostRetrying(ctx, 0, client, endpoint, "application/json", body, ua, header, maxBytes)
 		if err != nil {
 			return Decision{}, err
 		}
