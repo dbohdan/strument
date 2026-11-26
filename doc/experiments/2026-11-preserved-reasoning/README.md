@@ -4,7 +4,8 @@
 phase 3's committed rule, and kept as a patch. A check on 2026-11-26 found
 that Command Code's MiMo route preserves reasoning on the server, so MiMo's
 results in phases 2 and 3 compare two kinds of preservation, not preservation
-against none; see [the MiMo route](#mimo-route).** It follows the
+against none; see [the MiMo route](#mimo-route). Phase 4, a long-horizon
+trial, is designed and preregistered below and not yet run.** It follows the
 [panel survey](../2026-11-reasoning-survey/), which found every open-source
 harness sending reasoning back and Strument sending none. In short:
 - **Phase 1:** the channel works through Command Code for four of five
@@ -536,3 +537,130 @@ the labs' practice. Stripping templates belong to an earlier generation
 (Qwen3.0's dropped reasoning before the latest user message). The remaining
 explanation is the horizon: every task here finished in 5–14 requests, and
 the labs' claims are about hundreds.
+
+## Phase 4: design, not yet run — the long horizon
+
+### The question
+
+Every task so far finished in 5–14 requests. The labs' case for preserved
+reasoning is about agents that run for hundreds of them, where what the model
+has worked out (a map, a plan, which leads are still open) has to last. Does
+reasoning reaching the model change how a long task goes, when the history is
+kept in full and only the reasoning differs?
+
+### The fixture
+
+`data/facility.py` is a text world served outside the project. The model
+drives a maintenance robot through `./robot`, one command per bash call, and
+the world's state lives only in the server process:
+- **64 rooms** on an 8×8 grid, 74 doors, with names that repeat with a wing
+  prefix (`Battery Room`, `Upper Battery Room`), so a map kept loosely goes
+  wrong;
+- **the goal:** the Control Room panel's four-digit code;
+- **four notes** give the code's digits. Note D, five rooms from the start,
+  corrects a digit that note C, sixteen rooms away, states wrongly, so the
+  order a model meets them in matters, and entering the uncorrected code
+  (4759) is counted;
+- **two locks:** the Control Room is behind a blue door, the blue card is
+  behind red doors, and the red card is in the open.
+
+The shortest solution is 43 commands, and the battery allows 300. Each reply
+is short and says nothing about earlier ones, so whatever the model knows
+about the facility it has to keep itself: in the tool results, which stay in
+the history (the first pilot's contained sessions peaked at 20–50k tokens of
+a 262k context, so nothing is folded), in its visible text, or in its reasoning. `facility.py
+check` solves the world by search and verifies the locks and the correction
+are on every solution path.
+
+### Arms
+
+| arm | build | what reaches the model |
+| --- | --- | --- |
+| none | base, call IDs rewritten | no reasoning |
+| route (MiMo only) | base, real call IDs | Command Code's MiMo route re-inserts the stored reasoning of each tool-calling message ([the MiMo route](#mimo-route)) |
+| replay | replay patch | the client sends each message's reasoning back |
+
+The ID rewrite (`data/p4-hook.patch`, `STRUMENT_TRIAL_REWRITE_IDS`) maps each
+call ID to a deterministic hash, so the server cannot match its stored copy.
+DeepSeek's and Flint's routes keep nothing, so for them none and route are the
+same arm. Route is what Strument does today on MiMo's route.
+
+Models: MiMo V2.6 Flash and DeepSeek V4 Flash through Command Code, and
+Flint v1.0 (`recursive/flint-v1.0:free`, free through the same API), at
+`reasoning = "low"` with `context = 262144` (`data/configs/*-p4.star`). Eight
+sessions per cell, 56 in all, in a seeded shuffle (`data/p4-order.txt`), run
+several at a time by `data/p4pool.py`. Session timeouts: MiMo 6,600 s, Flint
+5,400 s, DeepSeek 3,000 s.
+
+### Containment
+
+The first pilot ran three sessions side by side with the server's source and
+logs in the scratch directory. Flint, after 300 commands, ran `ps`, found the
+server's command line, read the neighbouring MiMo session's robot log and then
+`facility.py` itself, code included. It still did not solve the task. So
+`data/p4run.py` now runs each session as `nobody` in a private mount and pid
+namespace, where `/tmp`, `/home` and `/root` are empty tmpfs and the project,
+state and builds are bind-mounted under `/mnt`, read-only for the builds. `ps`
+shows only the session's processes. The robot client carries a per-session
+token, and the server refuses and logs a request without it, so a session
+that finds another's port cannot drive that robot. A probe from inside the
+box found none of the server, the logs or this repository, and was refused at
+a neighbour's port.
+
+One exposure stays, and it is Strument's, not the fixture's: the bash tool runs
+as the same user as Strument, so `/proc/$PPID/environ` holds the API key that
+the environment allowlist keeps out of bash's own environment. The archives
+are checked for keys before they are published.
+
+### Counts
+
+Every count is read off the robot's log or the session record
+(`data/p4score.py`):
+- **Primary: commands to ACCESS GRANTED.** A session that does not get there
+  (battery, timeout, or a provider ending it) ranks below every session that
+  does.
+- **Solved** within the battery.
+- **Wandering:** revisits (moves into a room entered before), rereads of a
+  note, moves into a wall, moves into a locked door.
+- **The correction:** entries of the stale code 4759.
+- **Counter-metrics, reported as prominently:** seconds, requests, output
+  and reasoning tokens, uncached input, and cost by the credit balance.
+- **Delivery:** the provider-minus-estimate gap's growth over a session,
+  replay against none, as in phases 2 and 3.
+
+A session the provider ends before the battery or the timeout (MiMo's first
+pilot was refused as "high risk" at command 156) is rerun once, at the end of
+the schedule, with a new index. Those endings are reported per arm, since a
+refusal rate that differs by arm is a result too.
+
+### What would count as a result
+
+Written here before any trial session runs. For each model, replay (and for
+MiMo, route) is compared with none on commands to ACCESS GRANTED, unsolved
+sessions ranked last, by a one-sided Mann–Whitney test.
+- **Reasoning helps a model** if p < 0.05 in its favor and it solves no fewer
+  sessions. With eight a cell, only a large effect can clear this, and a null
+  rules out only a large effect.
+- **If replay helps two of the three models** without seconds per command
+  rising by more than a quarter, the replay patch earns a per-model setting,
+  reversing phase 3's retirement for long tasks.
+- **If route helps MiMo,** Strument's current behavior on that route already
+  carries the benefit, and nothing should strip the call IDs it depends on.
+  Replay against route is reported but decides nothing.
+- **If nothing clears the bar,** hypothesis 3 is not supported at 150–300
+  requests on these models, and the patch stays retired.
+
+### Cost
+
+The first pilot's two paid sessions cost $0.19 together, nearly all of it
+cached input. At that rate, 40 paid sessions cost about $4–8, inside the
+week's remaining Command Code allowance and under its five-hour cap at any
+concurrency used here. Flint costs nothing.
+
+## Files, phase 4
+
+- `data/facility.py`: the world, its self-check and the robot client.
+- `data/p4run.py`, `data/p4pool.py`, `data/p4-order.txt`: the namespaced
+  runner, the pool and the order.
+- `data/p4-hook.patch`, `data/p4-replay.patch`: the trial builds.
+- `data/p4score.py`: the counts.

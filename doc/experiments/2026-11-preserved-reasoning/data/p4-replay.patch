@@ -1,0 +1,118 @@
+diff --git a/internal/client/client.go b/internal/client/client.go
+index b8e41fc..fb7d9fe 100644
+--- a/internal/client/client.go
++++ b/internal/client/client.go
+@@ -130,6 +130,9 @@ type wireMessage struct {
+ 	Content    any            `json:"content"`
+ 	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
+ 	ToolCallID string         `json:"tool_call_id,omitempty"`
++	// Replayed reasoning, in the field it streamed on.
++	Reasoning        string `json:"reasoning,omitempty"`
++	ReasoningContent string `json:"reasoning_content,omitempty"`
+ }
+ 
+ // wireBlock is one content part. Only one payload is set, selected by Type.
+@@ -306,6 +309,13 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
+ 				Function: wireToolFunction{Name: tc.Name, Arguments: tc.WireArguments()},
+ 			})
+ 		}
++		if m.Role == llm.RoleAssistant && m.Reasoning != "" && m.Model == req.Model {
++			if m.ReasoningField == "reasoning" {
++				wm.Reasoning = m.Reasoning
++			} else {
++				wm.ReasoningContent = m.Reasoning
++			}
++		}
+ 		msgs[i] = wm
+ 	}
+ 	body["model"] = req.Model
+diff --git a/internal/client/sse.go b/internal/client/sse.go
+index 5dbba9b..f757f65 100644
+--- a/internal/client/sse.go
++++ b/internal/client/sse.go
+@@ -112,12 +112,12 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
+ 			}
+ 			for _, choice := range chunk.Choices {
+ 				if choice.Delta.Reasoning != "" {
+-					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.Reasoning}, nil) {
++					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.Reasoning, Field: "reasoning"}, nil) {
+ 						return
+ 					}
+ 				}
+ 				if choice.Delta.ReasoningContent != "" {
+-					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.ReasoningContent}, nil) {
++					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.ReasoningContent, Field: "reasoning_content"}, nil) {
+ 						return
+ 					}
+ 				}
+diff --git a/internal/coder/msgstate.go b/internal/coder/msgstate.go
+index 38ac7d4..9e8bfff 100644
+--- a/internal/coder/msgstate.go
++++ b/internal/coder/msgstate.go
+@@ -8,8 +8,9 @@ import (
+ 
+ // streamState is what one send's stream writes as it arrives.
+ type streamState struct {
+-	response  string // the reply so far
+-	reasoning string
++	response       string // the reply so far
++	reasoning      string
++	reasoningField string
+ 	// multi holds the earlier parts of a reply that hit the output limit and
+ 	// was continued, ahead of response.
+ 	multi string
+diff --git a/internal/coder/send.go b/internal/coder/send.go
+index cbce84a..74d7a69 100644
+--- a/internal/coder/send.go
++++ b/internal/coder/send.go
+@@ -209,6 +209,9 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
+ 			}
+ 		case llm.EventReasoning:
+ 			c.stream.reasoning += ev.Text
++			if ev.Field != "" {
++				c.stream.reasoningField = ev.Field
++			}
+ 			c.Out.StreamReasoning(ev.Text)
+ 			if loops.Feed(loopdetect.Reasoning, ev.Text) != nil {
+ 				return resLooping, nil
+@@ -403,6 +406,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
+ 	for {
+ 		c.stream.response = ""
+ 		c.stream.reasoning = ""
++		c.stream.reasoningField = ""
+ 		c.stream.toolCalls = nil
+ 		c.stream.toolCallIndex = map[int]int{}
+ 
+@@ -489,6 +493,8 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
+ 	if answer != "" || len(c.stream.toolCalls) > 0 {
+ 		msg := llm.TextMessage("assistant", answer)
+ 		msg.Model = c.Model.Slug
++		msg.Reasoning = c.stream.reasoning
++		msg.ReasoningField = c.stream.reasoningField
+ 		if len(c.stream.toolCalls) > 0 {
+ 			fillToolCalls(c.stream.toolCalls, len(c.doneMessages)+len(c.curMessages))
+ 			msg.ToolCalls = c.stream.toolCalls
+diff --git a/internal/llm/types.go b/internal/llm/types.go
+index 0d05ed4..1b29bb9 100644
+--- a/internal/llm/types.go
++++ b/internal/llm/types.go
+@@ -29,6 +29,10 @@ type Message struct {
+ 	// unknown. For the harness only: no client sends it. It is how a request
+ 	// can say where the conversation passed from one model to another.
+ 	Model string `json:"-"`
++	// Reasoning is the model's reasoning for this reply, and ReasoningField
++	// the wire field it streamed on. Replayed only to the model that wrote it.
++	Reasoning      string `json:"-"`
++	ReasoningField string `json:"-"`
+ }
+ 
+ // ToolCall is one function call the model requested. Arguments is the raw
+@@ -289,6 +293,8 @@ type StreamEvent struct {
+ 	Usage        *Usage         `json:"usage,omitempty"`
+ 	FinishReason string         `json:"finish_reason,omitempty"`
+ 	ToolCall     *ToolCallDelta `json:"tool_call,omitempty"`
++	// Field is the wire field a reasoning event arrived on.
++	Field string `json:"field,omitempty"`
+ }
+ 
+ // ToolCallDelta is a streamed fragment of a tool call. ID and Name arrive on

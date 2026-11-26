@@ -1,0 +1,53 @@
+diff --git a/internal/client/client.go b/internal/client/client.go
+index 96b4141..b8e41fc 100644
+--- a/internal/client/client.go
++++ b/internal/client/client.go
+@@ -8,6 +8,7 @@ import (
+ 	"bytes"
+ 	"context"
+ 	"crypto/rand"
++	"crypto/sha256"
+ 	"encoding/hex"
+ 	"encoding/json"
+ 	"fmt"
+@@ -15,6 +16,7 @@ import (
+ 	"iter"
+ 	"maps"
+ 	"net/http"
++	"os"
+ 	"regexp"
+ 	"strconv"
+ 	"strings"
+@@ -296,10 +298,10 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
+ 	reqMessages := rehomeToolImages(req.Messages)
+ 	msgs := make([]wireMessage, len(reqMessages))
+ 	for i, m := range reqMessages {
+-		wm := wireMessage{Role: m.Role, Content: wireContent(m.Content), ToolCallID: m.ToolCallID}
++		wm := wireMessage{Role: m.Role, Content: wireContent(m.Content), ToolCallID: trialID(m.ToolCallID)}
+ 		for _, tc := range m.ToolCalls {
+ 			wm.ToolCalls = append(wm.ToolCalls, wireToolCall{
+-				ID:       tc.ID,
++				ID:       trialID(tc.ID),
+ 				Type:     "function",
+ 				Function: wireToolFunction{Name: tc.Name, Arguments: tc.WireArguments()},
+ 			})
+@@ -554,6 +556,19 @@ func classifyHTTPError(resp *http.Response, adapter string, sent int) *llm.Strea
+ 		OutputCap: capRefusal, ContextLimit: limit}
+ }
+ 
++// trialID rewrites a tool-call ID when STRUMENT_TRIAL_REWRITE_IDS is set.
++// Trial build only (doc/experiments/2026-11-preserved-reasoning, phase 4): a
++// route that re-inserts stored reasoning for its own call IDs cannot match a
++// rewritten one, so the arm sends no reasoning at all. The rewrite is
++// deterministic, so the prefix stays the same from request to request.
++func trialID(id string) string {
++	if id == "" || os.Getenv("STRUMENT_TRIAL_REWRITE_IDS") == "" {
++		return id
++	}
++	sum := sha256.Sum256([]byte(id))
++	return "call_t" + hex.EncodeToString(sum[:8])
++}
++
+ // setConfigHeaders adds the config's request headers. They go on after the
+ // client's own, so a config header replaces a default one such as User-Agent;
+ // the headers it may not replace were refused when the config loaded.
