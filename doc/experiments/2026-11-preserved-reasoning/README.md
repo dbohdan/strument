@@ -512,3 +512,27 @@ What this changes:
   hypothesis, not a measurement.
 - **For Strument on this route,** sending nothing already gets MiMo's
   reasoning preserved for tool steps, which is the case the labs care about.
+
+## Check, 2026-11-26: do current templates strip earlier turns' reasoning?
+
+The labs' caching argument compares keeping reasoning (C) against a template
+that strips it from turns before the latest user message (B). B rewrites the
+middle of the prompt at every user turn and breaks the prefix cache there.
+Strument sends none (A), which is append-only like C. So caching could only
+explain a difference if the routes Strument uses were B.
+
+They are not. A fixed history with an 85-token planted thought was measured
+ending mid-turn and after a new user message (`data/checks/strip.py`). On
+Qwen3.8 27B, Qwen3.8 Max, DeepSeek V4 Flash, Kimi K3 and GLM-5.3, in both
+fields, the thought added its full 84–85 tokens in both positions. None strips.
+A live two-turn conversation with a padded system prompt (`data/checks/cache.py`,
+`cache.txt`, `cache-qwen.txt`) showed the cache holding equally with
+reasoning sent and without. DeepSeek, for example, reused 4,224 of 4,336
+tokens with reasoning sent. Caching is in 128–256-token blocks, so at
+`reasoning = "low"` the differences are small.
+
+On these routes, then, caching is not what separates Strument's results from
+the labs' practice. Stripping templates belong to an earlier generation
+(Qwen3.0's dropped reasoning before the latest user message). The remaining
+explanation is the horizon: every task here finished in 5–14 requests, and
+the labs' claims are about hundreds.

@@ -1,0 +1,8 @@
+Qwen3.8-Max        none  t1 r1  prompt= 4390 cached=    0 reasoning_chars=51
+Qwen3.8-Max        none  t1 r2  prompt= 4451 cached= 4352 reasoning_chars=57
+Qwen3.8-Max        none  t1 r3  prompt= 4508 cached= 4352 reasoning_chars=66
+Qwen3.8-Max        none  t2 r1  prompt= 4655 cached= 4352 reasoning_chars=34
+Qwen3.8-Max        send  t1 r1  prompt= 4390 cached= 4352 reasoning_chars=52
+Qwen3.8-Max        send  t1 r2  prompt= 4455 cached= 4352 reasoning_chars=90
+Qwen3.8-Max        send  t1 r3  prompt= 4530 cached= 4352 reasoning_chars=33
+Qwen3.8-Max        send  t2 r1  prompt= 4638 cached= 4352 reasoning_chars=156
