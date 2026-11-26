@@ -1,7 +1,10 @@
 # Preserved reasoning: does it reach the model, and does it help?
 
 **Status: characterization, run 2026-11-25. The replay patch is retired by
-phase 3's committed rule, and kept as a patch.** It follows the
+phase 3's committed rule, and kept as a patch. A check on 2026-11-26 found
+that Command Code's MiMo route preserves reasoning on the server, so MiMo's
+results in phases 2 and 3 compare two kinds of preservation, not preservation
+against none; see [the MiMo route](#mimo-route).** It follows the
 [panel survey](../2026-11-reasoning-survey/), which found every open-source
 harness sending reasoning back and Strument sending none. In short:
 - **Phase 1:** the channel works through Command Code for four of five
@@ -468,3 +471,44 @@ the right file afterwards. Replay did not prevent it.
   the counts. `data/p3fired.py`, `data/p3-main-fired.tsv`: delivery.
 - Raw sessions: `dbohdan/experimental-data`,
   `strument/2026-11-preserved-reasoning/phase3-runs.tar.xz` at `df05923`.
+
+<a id="mimo-route"></a>
+
+## Check, 2026-11-26: Command Code's MiMo route preserves reasoning itself
+
+The question was whether replaying MiMo's `reasoning` string was a lossy copy
+of `reasoning_details`. It is not: in three generations, `reasoning_details`
+was one `reasoning.text` entry identical to the string (`data/checks/details.py`).
+But replaying either one added no prompt tokens at all, where phase 1's planted
+thought had. The scripts in `data/checks/` narrowed it down:
+- Neither the assistant's text content, `reasoning_effort`, the user message,
+  nor the tool's shape decides it (`content.py`, `effort.py`, `factor.py`).
+  The same request repeated 12 times always delivered (`repeat.py`).
+- **The call ID decides it** (`ids.py`). With the call ID MiMo generated and
+  no reasoning field, the prompt was 46 tokens larger than with a fresh ID: the
+  server re-inserted the stored reasoning (31 reasoning tokens, plus what looks
+  like tag overhead). With a reasoning field, ours replaced the stored one
+  under either ID.
+- **It reaches back across steps and user turns** (`reach.py`). The re-inserted
+  amount accumulated over two tool steps (19, then 22 tokens) and survived a new
+  user message. Final text answers, which carry no call ID, were not
+  re-inserted.
+- **Only MiMo's route does this.** DeepSeek V4 Flash, Kimi K3 and GLM-5.3 gave
+  identical counts for their own IDs and fresh ones.
+
+What this changes:
+- **Phase 1 stands.** Its call IDs were made up, so no server copy existed.
+- **DeepSeek's and Kimi's results in phases 2 and 3 stand.**
+- **MiMo's do not mean what they were reported to mean.** Its base arm had
+  every tool-calling message's reasoning preserved by the server, so phases 2
+  and 3 compared the server's copy against the client's. The base arm's
+  provider-minus-estimate gap tracking turn-1 reasoning almost one to one in
+  phase 3 was this, not estimate drift as reported.
+- **MiMo's slowdown under client replay still stands as measured,** in both
+  phases. It now has a candidate cause. The server's re-insertion carried
+  overhead that looks like think tags; our field cost exactly its own length.
+  If a client-sent field renders differently from the server's own copy,
+  replay showed MiMo its reasoning in an unfamiliar form. That is a
+  hypothesis, not a measurement.
+- **For Strument on this route,** sending nothing already gets MiMo's
+  reasoning preserved for tool steps, which is the case the labs care about.

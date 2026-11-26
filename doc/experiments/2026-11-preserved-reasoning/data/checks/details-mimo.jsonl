@@ -1,0 +1,3 @@
+{"rep": 0, "reasoning_tokens": 25, "string_chars": 99, "details_types": ["reasoning.text"], "details_text_chars": 99, "details_same_as_string": true, "prompt_none": 224, "prompt_string": 224, "prompt_details": 224, "prompt_both": 224}
+{"rep": 1, "reasoning_tokens": 26, "string_chars": 102, "details_types": ["reasoning.text"], "details_text_chars": 102, "details_same_as_string": true, "prompt_none": 260, "prompt_string": 260, "prompt_details": 260, "prompt_both": 260}
+{"rep": 2, "reasoning_tokens": 45, "string_chars": 178, "details_types": ["reasoning.text"], "details_text_chars": 178, "details_same_as_string": true, "prompt_none": 333, "prompt_string": 333, "prompt_details": 333, "prompt_both": 333}
