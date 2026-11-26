@@ -75,3 +75,15 @@ func TestOutputCapRefusalIsExplained(t *testing.T) {
 		t.Errorf("hint shown %d times, want 1:\n%s", n, got)
 	}
 }
+
+// The model's merged headers ride on the request, so a provider-wide header
+// such as Command Code's x-cmd-zdr reaches every call the model makes.
+func TestRequestCarriesConfigHeaders(t *testing.T) {
+	c := toolCoder(t, t.TempDir())
+	c.Model.Provider.Headers = map[string]string{"x-cmd-zdr": "1"}
+	c.Model.Headers = map[string]string{"X-Extra": "yes"}
+	h := c.buildRequest(nil).Headers
+	if h["X-Cmd-Zdr"] != "1" || h["X-Extra"] != "yes" {
+		t.Errorf("headers = %v, want the provider's and the model's", h)
+	}
+}

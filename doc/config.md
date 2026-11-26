@@ -1510,7 +1510,7 @@ A decision model for `approve_model`. It is its own type, not a `model()`:
 
 These parameters, apart from `dialect` and `slug`, are keyword-only.
 
-### `provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None, extra_params={})`
+### `provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None, extra_params={}, headers={})`
 
 Describes one API endpoint and dialect. Returns a provider value to pass to
 `model()`.
@@ -1547,6 +1547,23 @@ Describes one API endpoint and dialect. Returns a provider value to pass to
   `stream_options`, `usage`, `max_tokens`, `max_output_tokens` — those are
   rejected). Values must be JSON-serializable. The output cap has its own
   setting, `max_output`, and the refusal says so.
+- **`headers`** — a dict of HTTP headers sent on every request to the
+  provider, after Strument's own, so one can replace a default such as
+  `User-Agent`. Names and values are strings; use `env()` for anything
+  secret. The headers Strument sets for the request itself are refused:
+  `Authorization` and `x-api-key` (set `api_key` instead), `Content-Type`,
+  `Content-Length` and `Host`. A value may not contain a line break. The
+  approval model's `decision_model()` has its own endpoint and does not take
+  these.
+
+  Command Code's zero data retention is a header: every request either runs
+  on an upstream that keeps nothing or fails with HTTP 422
+  (`cmd_zdr_no_providers`).
+
+  ```python
+  cc = provider("openai", base_url = "https://api.commandcode.ai/provider/v1",
+                api_key = env("COMMAND_CODE_API_KEY"), headers = {"x-cmd-zdr": "1"})
+  ```
 
 #### opencode Go
 
@@ -1690,7 +1707,7 @@ Strument sends `store = false` on Responses requests. It holds the whole
 history and resends it; this setting requests that the provider not store the
 conversation for later API retrieval. Provider retention policies are separate.
 
-### `model(provider, slug, *, display_name=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={})`
+### `model(provider, slug, *, display_name=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={}, headers={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -1801,6 +1818,9 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   the provider reports none.
 - **`extra_params`** — as on `provider()`, but per model; on a key clash the
   model's value wins over the provider's.
+- **`headers`** — as on `provider()`, but per model. On a name clash, which is
+  decided without regard to case, the model's value wins over the
+  provider's, so the header is sent once.
 
 ### `env(name, default)`
 

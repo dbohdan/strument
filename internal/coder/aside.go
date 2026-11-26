@@ -54,6 +54,7 @@ func (c *Coder) runSide(ctx context.Context, call, prompt string, frame sideFram
 		Temperature:     c.Model.Temperature,
 		ReasoningEffort: c.Model.Reasoning,
 		ExtraParams:     c.Model.RequestExtraParams(),
+		Headers:         c.Model.RequestHeaders(),
 		// Deliberately no system message and no tools: a plain question.
 	}
 

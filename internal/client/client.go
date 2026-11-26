@@ -407,6 +407,7 @@ func (c *Client) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.Stream
 		}
 
 		httpClient := &http.Client{Transport: c.Transport}
+		setConfigHeaders(httpReq, req.Headers)
 		resp, err := httpClient.Do(httpReq)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -551,6 +552,15 @@ func classifyHTTPError(resp *http.Response, adapter string, sent int) *llm.Strea
 	msg += opencodeRoutingHint(adapter, resp.StatusCode)
 	return &llm.StreamError{Class: class, Message: fmt.Sprintf("HTTP %d: %s", resp.StatusCode, msg),
 		OutputCap: capRefusal, ContextLimit: limit}
+}
+
+// setConfigHeaders adds the config's request headers. They go on after the
+// client's own, so a config header replaces a default one such as User-Agent;
+// the headers it may not replace were refused when the config loaded.
+func setConfigHeaders(r *http.Request, headers map[string]string) {
+	for k, v := range headers {
+		r.Header.Set(k, v)
+	}
 }
 
 // isContextWindowMessage spots provider phrasing for over-long prompts.

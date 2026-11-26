@@ -762,6 +762,7 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 		Temperature:     c.Model.Temperature,
 		ReasoningEffort: c.Model.Reasoning,
 		ExtraParams:     c.Model.RequestExtraParams(),
+		Headers:         c.Model.RequestHeaders(),
 		MaxTokens:       c.Model.MaxOutput,
 	}
 	// Whatever tools the session offers, offer them. A condition on the edit

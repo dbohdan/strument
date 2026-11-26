@@ -126,16 +126,39 @@ func dictToParams(where string, d *starlark.Dict) (map[string]any, error) {
 	return params, nil
 }
 
+// dictToHeaders converts a headers={} dict: string names to string values.
+func dictToHeaders(where string, d *starlark.Dict) (map[string]string, error) {
+	if d == nil || d.Len() == 0 {
+		return nil, nil //nolint:nilnil // No headers is a valid, empty result.
+	}
+	out := make(map[string]string, d.Len())
+	for _, item := range d.Items() {
+		k, ok := starlark.AsString(item[0])
+		if !ok {
+			return nil, fmt.Errorf("%s: headers: name %s is not a string", where, item[0].String())
+		}
+		v, ok := starlark.AsString(item[1])
+		if !ok {
+			return nil, fmt.Errorf("%s: headers: the value of %q is not a string", where, k)
+		}
+		out[k] = v
+	}
+	if err := validateHeaders(where, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // builtinProvider implements
 // provider(adapter, *, base_url=None, api_key=None, name=None, proxy=None,
-// extra_params={}). proxy takes a socks5:// URL, or "direct" to force a direct
+// extra_params={}, headers={}). proxy takes a socks5:// URL, or "direct" to force a direct
 // connection when a global proxy is set; unset inherits the global proxy.
 func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	if len(args) > 1 {
 		return nil, errors.New("provider: only 'adapter' may be positional")
 	}
 	var adapter, baseURL, apiKey, name, proxy string
-	var extraParams *starlark.Dict
+	var extraParams, headers *starlark.Dict
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
 		"adapter", &adapter,
 		"base_url?", &baseURL,
@@ -143,6 +166,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 		"name?", &name,
 		"proxy?", &proxy,
 		"extra_params?", &extraParams,
+		"headers?", &headers,
 	); err != nil {
 		return nil, err
 	}
@@ -159,6 +183,10 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 	if err != nil {
 		return nil, err
 	}
+	hdrs, err := dictToHeaders("provider", headers)
+	if err != nil {
+		return nil, err
+	}
 	return &providerValue{p: Provider{
 		Adapter:     adapter,
 		BaseURL:     baseURL,
@@ -166,6 +194,7 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 		Name:        name,
 		Proxy:       proxy,
 		ExtraParams: params,
+		Headers:     hdrs,
 	}}, nil
 }
 
@@ -193,7 +222,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var contextTokens, maxOutput int
 	var prefill bool
 	var inputCost, outputCost starlark.Value
-	var extraParams *starlark.Dict
+	var extraParams, headers *starlark.Dict
 	var inputModalities *starlark.List
 	var retiredWeakModel starlark.Value
 	if err := starlark.UnpackArgs(b.Name(), args, kwargs,
@@ -214,6 +243,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"input_cost?", &inputCost,
 		"output_cost?", &outputCost,
 		"extra_params?", &extraParams,
+		"headers?", &headers,
 		"input_modalities?", &inputModalities,
 	); err != nil {
 		return nil, err
@@ -300,6 +330,9 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	}
 
 	if m.ExtraParams, err = dictToParams("model", extraParams); err != nil {
+		return nil, err
+	}
+	if m.Headers, err = dictToHeaders("model", headers); err != nil {
 		return nil, err
 	}
 	return &modelValue{m: m}, nil

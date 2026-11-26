@@ -312,6 +312,7 @@ func (c *ResponsesClient) Send(ctx context.Context, req llm.Request) iter.Seq2[l
 		}
 
 		httpClient := &http.Client{Transport: c.Transport}
+		setConfigHeaders(httpReq, req.Headers)
 		resp, err := httpClient.Do(httpReq)
 		if err != nil {
 			if ctx.Err() != nil {

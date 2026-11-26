@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -66,6 +67,9 @@ type Provider struct {
 	Name        string
 	Proxy       string         // resolved SOCKS5 proxy URL; "" => direct (no proxy)
 	ExtraParams map[string]any // JSON-only, reserved keys rejected
+	// Headers are sent on every request to this provider, after Strument's
+	// own. Reserved names are rejected at load; see reservedHeaders.
+	Headers map[string]string
 }
 
 // GroupKey groups models onto one runtime client/connection pool per
@@ -118,6 +122,8 @@ type Model struct {
 	InputCost       *llm.Money // per-token USD (config declares per-million); nil => unknown (never fabricate cost)
 	OutputCost      *llm.Money
 	ExtraParams     map[string]any
+	// Headers are this model's request headers, over the provider's.
+	Headers map[string]string
 }
 
 // Accepts reports whether this model takes content blocks of the given kind.
@@ -187,6 +193,65 @@ func (m *Model) RequestExtraParams() map[string]any {
 	maps.Copy(out, m.Provider.ExtraParams)
 	maps.Copy(out, m.ExtraParams)
 	return out
+}
+
+// RequestHeaders merges provider-scoped and model-scoped headers, model over
+// provider. Names are canonicalized, so "x-cmd-zdr" on the model replaces
+// "X-Cmd-Zdr" on the provider rather than sending both.
+func (m *Model) RequestHeaders() map[string]string {
+	if len(m.Provider.Headers) == 0 && len(m.Headers) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(m.Provider.Headers)+len(m.Headers))
+	for _, h := range []map[string]string{m.Provider.Headers, m.Headers} {
+		for k, v := range h {
+			out[http.CanonicalHeaderKey(k)] = v
+		}
+	}
+	return out
+}
+
+// reservedHeaders are request headers Strument sets itself. A config header
+// cannot replace them: the credential has its own setting, and the rest
+// describe the body Strument is sending. The value, when non-empty, is the
+// setting that owns the header.
+var reservedHeaders = map[string]string{
+	"Authorization":  "api_key",
+	"X-Api-Key":      "api_key",
+	"Content-Type":   "",
+	"Content-Length": "",
+	"Host":           "",
+}
+
+// validateHeaders checks header names and values: a name must be an HTTP
+// token, a value must not contain a line break (which would end the header and
+// start another), and no reserved header may be set.
+func validateHeaders(where string, h map[string]string) error {
+	for k, v := range h {
+		if k == "" || strings.IndexFunc(k, func(r rune) bool { return !isTokenChar(r) }) >= 0 {
+			return fmt.Errorf("%s: headers: %q is not a valid header name", where, k)
+		}
+		if strings.ContainsAny(v, "\r\n\x00") {
+			return fmt.Errorf("%s: headers: the value of %q contains a line break", where, k)
+		}
+		if owner, ok := reservedHeaders[http.CanonicalHeaderKey(k)]; ok {
+			if owner != "" {
+				return fmt.Errorf("%s: headers: %q is set by Strument; set `%s` instead", where, k, owner)
+			}
+			return fmt.Errorf("%s: headers: %q is set by Strument and cannot be replaced", where, k)
+		}
+	}
+	return nil
+}
+
+// isTokenChar reports whether r may appear in an HTTP header name (RFC 9110
+// token characters).
+func isTokenChar(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		return true
+	}
+	return strings.ContainsRune("!#$%&'*+-.^_`|~", r)
 }
 
 // SandboxLandlock is the only confinement mechanism Strument implements. It is

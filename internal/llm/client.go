@@ -13,8 +13,10 @@ type Request struct {
 	Temperature     *float64
 	ReasoningEffort string         // request-side effort, e.g. "low"; "" => omit
 	ExtraParams     map[string]any // fenced passthrough
-	Tools           []ToolDef      // function tools offered to the model; nil => none
-	ToolChoice      string         // "auto" | "none" | ""; "" => omit
+	// Headers are the config's request headers, sent after the client's own.
+	Headers    map[string]string
+	Tools      []ToolDef // function tools offered to the model; nil => none
+	ToolChoice string    // "auto" | "none" | ""; "" => omit
 
 	// MaxTokens caps the response. Zero means "unset": the OpenAI dialect
 	// omits it and lets the provider decide, but Anthropic's Messages API
