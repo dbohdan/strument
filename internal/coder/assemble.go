@@ -173,6 +173,14 @@ func (c *Coder) factsText() string {
 	if c.offersShell() {
 		b.WriteString("- Shell: commands given to the bash tool run in Strument's built-in shell, " +
 			"which takes bash syntax on every platform. It is not the user's login shell.\n")
+		b.WriteString(c.sandboxFact())
+		// Codex filters a command's environment and says nothing, as Strument
+		// did (doc/experiments/2026-11-facts-survey). A model that does not
+		// know runs curl with $GITHUB_TOKEN and debugs the 401; one that does
+		// asks the user.
+		b.WriteString("- Commands get a filtered environment: API keys and other credentials are " +
+			"withheld unless the user allowed them, so a command that needs one fails without it. " +
+			"Ask the user rather than look for one.\n")
 	}
 	// Not "Current date": the date is taken once, when Strument starts, so
 	// after midnight that label would be the false part. The
@@ -385,4 +393,32 @@ func (c *Coder) countMessages(msgs []llm.Message) int {
 		}
 	}
 	return n
+}
+
+// sandboxFact says what confines the bash tool's commands, before the first
+// one fails on it. Only Codex in the panel states its sandbox up front; the
+// denial hint (deniedHint) is the after-the-fact version of the same line.
+// Nothing when there is no sandbox: approval already stands between the model
+// and the machine, and the line would say only what a model assumes anyway.
+func (c *Coder) sandboxFact() string {
+	switch {
+	case c.Sandbox.blocksExecution():
+		line := "- Commands are disabled: this session requires a sandbox, and none is active"
+		if why := c.Sandbox.Unavailable; why != "" {
+			line += " (" + why + ")"
+		}
+		return line + ". The user can still run commands with /run.\n"
+	case c.Sandbox.Active && len(c.Sandbox.Writable) > 0:
+		home, _ := os.UserHomeDir()
+		roots := make([]string, len(c.Sandbox.Writable))
+		for i, r := range c.Sandbox.Writable {
+			if home != "" && (r == home || strings.HasPrefix(r, home+string(filepath.Separator))) {
+				r = "~" + r[len(home):]
+			}
+			roots[i] = r
+		}
+		return "- Sandbox: commands can write only under " + strings.Join(roots, ", ") +
+			". Reading and running programs are not restricted.\n"
+	}
+	return ""
 }

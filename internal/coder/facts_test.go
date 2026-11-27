@@ -1,6 +1,8 @@
 package coder
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -64,5 +66,29 @@ func TestFactsGitLineFollowsTheSession(t *testing.T) {
 		if !found || !strings.Contains(f, tc.want) || (tc.absent != "" && strings.Contains(git, tc.absent)) {
 			t.Errorf("shell %v, commits %v:\n%s", tc.shell, tc.commits, f)
 		}
+	}
+}
+
+// The sandbox is stated when it confines commands, and so is a required one
+// that is missing; with none, nothing is said.
+func TestFactsStateTheSandbox(t *testing.T) {
+	home, _ := os.UserHomeDir()
+	c := testCoder(t)
+	c.SuggestShellCommands = true
+	c.Platform = PlatformInfo{Platform: "Linux"}
+	if f := c.factsText(); strings.Contains(f, "Sandbox") || strings.Contains(f, "disabled") {
+		t.Errorf("no sandbox, yet:\n%s", f)
+	}
+	c.Sandbox = SandboxState{Required: true, Active: true, Writable: []string{"/home/u/proj", "/tmp", filepath.Join(home, ".cache")}}
+	if f := c.factsText(); !strings.Contains(f, "- Sandbox: commands can write only under /home/u/proj, /tmp, ~/.cache. Reading") {
+		t.Errorf("active:\n%s", f)
+	}
+	c.Sandbox = SandboxState{Required: true, Unavailable: "no Landlock on this kernel: ENOSYS"}
+	if f := c.factsText(); !strings.Contains(f, "- Commands are disabled: this session requires a sandbox, and none is active (no Landlock on this kernel: ENOSYS). The user can still run commands with /run.") {
+		t.Errorf("required and missing:\n%s", f)
+	}
+	c.SuggestShellCommands = false
+	if f := c.factsText(); strings.Contains(f, "Sandbox") || strings.Contains(f, "filtered environment") {
+		t.Errorf("command facts without the bash tool:\n%s", f)
 	}
 }

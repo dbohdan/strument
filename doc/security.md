@@ -312,6 +312,12 @@ browser does.
 Model-run commands receive an allowlisted subset of your environment rather
 than inheriting it in full; see [`env_allow`](config.md#env_allow).
 
+The model is told so in its system prompt, along with the sandbox's writable
+roots when one is active, so that a command needing a credential sends it to
+you rather than to a debugging session. In the panel, only Codex states its
+sandbox up front, and none mentions a filtered environment
+([the survey](experiments/2026-11-facts-survey/)).
+
 This is not part of the sandbox and does not depend on it. The sandbox
 restricts filesystem writes; the allowlist controls which environment variables
 a command receives. It is also, by accident, the main thing keeping a
