@@ -1,0 +1,6 @@
+deepseek/deepseek-v4-flash   reasoning_content  added mid-turn=0  added after a new user turn=0
+deepseek/deepseek-v4-flash   reasoning          added mid-turn=0  added after a new user turn=0
+xiaomi/mimo-v2.6-flash       reasoning_content  added mid-turn=85  added after a new user turn=85
+xiaomi/mimo-v2.6-flash       reasoning          added mid-turn=85  added after a new user turn=85
+moonshotai/kimi-k3           reasoning_content  added mid-turn=85  added after a new user turn=85
+moonshotai/kimi-k3           reasoning          added mid-turn=85  added after a new user turn=85

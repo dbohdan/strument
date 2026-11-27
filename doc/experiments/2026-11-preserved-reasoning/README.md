@@ -813,6 +813,32 @@ every task, and the return comes only on tasks long enough to need a plan.
   direction is clear, the size less so.
 - **Flint** says nothing either way, at the floor and short of quota.
 
+## Check, 2026-11-27: Command Code's DeepSeek route stopped taking replayed reasoning
+
+The live check of Strument's `replay_reasoning` on DeepSeek V4 Flash found
+the reasoning on the wire and none of it in the prompt. A capture through
+`strumentrec` showed every earlier step's reasoning in `reasoning_content`,
+mid-turn and after a `-c` resume. Resending the captured bodies with and
+without those fields gave identical prompt counts (6,229 and 6,452, twice
+each), and so did each variant tried: flattened content, no
+`reasoning_effort`, the `reasoning` field, and no tools.
+
+`data/checks/strip.py`, unchanged, says the same. Its 85-token thought added
+84 tokens to DeepSeek's prompt on 2026-11-26 and adds 0 now, in both fields,
+mid-turn and after a new user message. MiMo V2.6 Flash and Kimi K3 still take
+all 85 (`data/checks/strip-2026-11-27.txt`). So the route changed between the
+two days, not the request.
+
+What this changes:
+- **Phase 4's DeepSeek result stands as measured.** Delivery was checked on
+  2026-11-26, the day those sessions ran. Their own records cannot confirm it,
+  because the usage counts are unusable.
+- **On this route today, `replay_reasoning` does nothing for DeepSeek.** It
+  costs nothing either, since the provider discards the field before
+  counting it.
+- **Delivery is a property of the route on the day.** It is not a fact about
+  the model. Before relying on the setting, measure it with `strip.py`.
+
 ## Files, phase 4
 
 - `data/facility.py`: the world, its self-check and the robot client.

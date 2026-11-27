@@ -1803,10 +1803,15 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   tasks of 5–14 requests it changed nothing but the bill, and made MiMo slower
   ([the trials](experiments/2026-11-preserved-reasoning/)).
 
-  Whether to turn it on depends on the route as well as the model. Some keep
-  the reasoning on the server and put it back themselves: Command Code's MiMo
-  route does, matching it by tool-call id, so there this setting adds nothing.
-  DeepSeek's and Kimi's routes there keep nothing.
+  Whether to turn it on depends on the route as well as the model, and it can
+  change from one day to the next. Some routes keep the reasoning on the
+  server and put it back themselves: Command Code's MiMo route does, matching
+  it by tool-call id, so there this setting adds nothing. Others discard
+  what is sent: Command Code's DeepSeek route took it on 2026-11-26 and
+  dropped it on 2026-11-27. To check a route, send the same request with and
+  without an assistant message's `reasoning_content` and compare the prompt
+  token counts; [`strip.py`](experiments/2026-11-preserved-reasoning/data/checks/strip.py)
+  does this.
 
   The reasoning goes back only to the model that wrote it; after `/model`, the
   new model gets none of the old one's. It counts toward the context estimate,
