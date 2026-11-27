@@ -1222,3 +1222,40 @@ func TestModelsCarryTheirAlias(t *testing.T) {
 		}
 	}
 }
+
+// replay_reasoning defaults off, reaches the model when set, and is refused on
+// the dialects whose reasoning only goes back as opaque provider items, rather
+// than accepted and silently not done.
+func TestReplayReasoningParsing(t *testing.T) {
+	load := func(t *testing.T, adapter, decl string) (*Model, error) {
+		t.Helper()
+		src := fmt.Sprintf(`
+p = provider(%q, api_key = "k")
+models = {"m": model(p, "s"%s)}
+default = "m"
+`, adapter, decl)
+		cfg, err := Load(harness(t, src, "", nil))
+		if err != nil {
+			return nil, err
+		}
+		return cfg.Models["m"], nil
+	}
+
+	if m, err := load(t, "openrouter", ""); err != nil || m.ReplayReasoning {
+		t.Errorf("unset: %v, %v; want off", m, err)
+	}
+	for _, adapter := range []string{"openai", "openrouter", "opencode"} {
+		if m, err := load(t, adapter, ", replay_reasoning = True"); err != nil || !m.ReplayReasoning {
+			t.Errorf("%s: %v; want on", adapter, err)
+		}
+	}
+	for _, adapter := range []string{"anthropic", "opencode-anthropic", "responses", "opencode-responses"} {
+		_, err := load(t, adapter, ", replay_reasoning = True")
+		if err == nil || !strings.Contains(err.Error(), "replay_reasoning") {
+			t.Errorf("%s: err = %v, want a refusal naming replay_reasoning", adapter, err)
+		}
+		if _, err := load(t, adapter, ", replay_reasoning = False"); err != nil {
+			t.Errorf("%s: replay_reasoning = False refused: %v", adapter, err)
+		}
+	}
+}

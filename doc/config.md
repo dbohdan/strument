@@ -1709,7 +1709,7 @@ Strument sends `store = false` on Responses requests. It holds the whole
 history and resends it; this setting requests that the provider not store the
 conversation for later API retrieval. Provider retention policies are separate.
 
-### `model(provider, slug, *, display_name=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={}, headers={})`
+### `model(provider, slug, *, display_name=None, reasoning=None, reasoning_tag=None, temperature=None, cache=False, context=None, max_output=None, prefill=False, replay_reasoning=False, input_cost=None, output_cost=None, input_modalities=None, extra_params={}, headers={})`
 
 Describes one usable model. Returns a model value to place in the `models` dict.
 
@@ -1795,6 +1795,28 @@ Describes one usable model. Returns a model value to place in the `models` dict.
 
   The check is one request: put a partial sentence in an assistant message and
   see whether the reply carries on from it or repeats it.
+- **`replay_reasoning`** — send the model its own reasoning back on each of its
+  earlier replies, in the field it streamed on (`reasoning` or
+  `reasoning_content`). Off by default. It helps on long tasks: over a task of
+  110–300 commands, MiMo V2.6 Flash solved 7 of 8 sessions with its reasoning
+  and 1 of 8 without, and DeepSeek V4 Flash needed a quarter fewer commands. On
+  tasks of 5–14 requests it changed nothing but the bill, and made MiMo slower
+  ([the trials](experiments/2026-11-preserved-reasoning/)).
+
+  Whether to turn it on depends on the route as well as the model. Some keep
+  the reasoning on the server and put it back themselves: Command Code's MiMo
+  route does, matching it by tool-call id, so there this setting adds nothing.
+  DeepSeek's and Kimi's routes there keep nothing.
+
+  The reasoning goes back only to the model that wrote it; after `/model`, the
+  new model gets none of the old one's. It counts toward the context estimate,
+  and when old tool results are cleared to make room, the reasoning of the
+  same older replies goes with them. A restored session replays none, and
+  reasoning a model writes in an inline tag (`reasoning_tag`) is not replayed.
+  Only the chat-completions adapters (`openai`, `openrouter`, `opencode`)
+  accept it: the Anthropic and Responses dialects carry reasoning back only as
+  signed or encrypted provider items, which Strument does not keep, so the
+  setting is refused there rather than ignored.
 - **`input_modalities`** — the kinds of content this model accepts, as a list.
   The only values are `"text"` and `"image"`; anything else is an error at load
   rather than a setting that quietly does nothing. Unset means text only, which

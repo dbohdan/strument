@@ -132,12 +132,12 @@ func ParseSSE(r io.Reader) iter.Seq2[llm.StreamEvent, error] {
 			}
 			for _, choice := range chunk.Choices {
 				if choice.Delta.Reasoning != "" {
-					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.Reasoning}, nil) {
+					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.Reasoning, Field: llm.ReasoningFieldReasoning}, nil) {
 						return
 					}
 				}
 				if choice.Delta.ReasoningContent != "" {
-					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.ReasoningContent}, nil) {
+					if !yield(llm.StreamEvent{Kind: llm.EventReasoning, Text: choice.Delta.ReasoningContent, Field: llm.ReasoningFieldContent}, nil) {
 						return
 					}
 				}

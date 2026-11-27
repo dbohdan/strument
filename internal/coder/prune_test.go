@@ -25,7 +25,7 @@ func TestPruneClearsOldResultsAndKeepsTheRest(t *testing.T) {
 	}
 	count := testCoder(t).msgTokens
 
-	n, freed := pruneToolResults(msgs, 3000, count, clearedToolResult)
+	n, _, freed := pruneToolResults(msgs, 3000, count, clearedToolResult)
 
 	if n == 0 || freed < 3000/8 {
 		t.Fatalf("cleared %d results, freed %d tokens", n, freed)
@@ -56,7 +56,7 @@ func TestPruneSkipsASmallGain(t *testing.T) {
 		msgs = append(msgs, toolTurn(id, 60)...)
 	}
 	count := testCoder(t).msgTokens
-	if n, _ := pruneToolResults(msgs, 4000, count, clearedToolResult); n != 0 {
+	if n, _, _ := pruneToolResults(msgs, 4000, count, clearedToolResult); n != 0 {
 		t.Errorf("cleared %d results for a gain under an eighth of the budget", n)
 	}
 }

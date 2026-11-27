@@ -23,6 +23,11 @@ type Request struct {
 	// requires the field, so that client substitutes a default rather than
 	// sending a request the endpoint will reject.
 	MaxTokens int
+
+	// ReplayReasoning sends each of the model's own earlier assistant messages
+	// back with its reasoning, in the field it streamed on. Only the
+	// chat-completions dialect reads it.
+	ReplayReasoning bool
 }
 
 // ToolDef is a function tool offered to the model. Parameters is a JSON

@@ -203,7 +203,8 @@ func builtinProvider(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tupl
 //
 //	reasoning=None, reasoning_tag=None, temperature=None,
 //	cache=False, context=None, max_output=None, prefill=False,
-//	input_cost=None, output_cost=None, extra_params={}).
+//	replay_reasoning=False, input_cost=None, output_cost=None,
+//	extra_params={}).
 //
 // input_cost and output_cost are USD per million tokens.
 func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
@@ -220,7 +221,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 	var repoMap starlark.Value
 	var cache bool
 	var contextTokens, maxOutput int
-	var prefill bool
+	var prefill, replayReasoning bool
 	var inputCost, outputCost starlark.Value
 	var extraParams, headers *starlark.Dict
 	var inputModalities *starlark.List
@@ -240,6 +241,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		"context?", &contextTokens,
 		"max_output?", &maxOutput,
 		"prefill?", &prefill,
+		"replay_reasoning?", &replayReasoning,
 		"input_cost?", &inputCost,
 		"output_cost?", &outputCost,
 		"extra_params?", &extraParams,
@@ -298,6 +300,20 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		return nil, fmt.Errorf("model: provider must be a provider value, got %s", providerV.Type())
 	}
 
+	// The other two dialects carry reasoning back only as the provider's own
+	// opaque items (Anthropic's signed thinking blocks, the Responses API's
+	// encrypted reasoning), which Strument does not keep. Refused rather than
+	// ignored, so a config cannot claim a replay that never happens.
+	if replayReasoning {
+		switch pv.p.Adapter {
+		case AdapterOpenAI, AdapterOpenRouter, AdapterOpenCode:
+		default:
+			return nil, fmt.Errorf("model: replay_reasoning works on the chat-completions adapters "+
+				"(\"openai\", \"openrouter\", \"opencode\") only; %q carries reasoning back as "+
+				"signed or encrypted items Strument does not keep. Drop it from this model", pv.p.Adapter)
+		}
+	}
+
 	m := &Model{
 		Provider:     pv.p,
 		Slug:         slug,
@@ -309,6 +325,7 @@ func builtinModel(_ *starlark.Thread, b *starlark.Builtin, args starlark.Tuple, 
 		MaxOutput:    maxOutput,
 		Prefill:      prefill,
 
+		ReplayReasoning: replayReasoning,
 		InputModalities: modalities,
 	}
 

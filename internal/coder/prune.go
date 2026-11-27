@@ -43,14 +43,20 @@ func (c *Coder) clearedPlaceholder() string {
 }
 
 // pruneToolResults clears the text of tool results outside the most recent
-// half of the budget, oldest first, and reports how many results it cleared
-// and how many tokens that freed. It clears nothing unless that frees at least
-// an eighth of the budget: each clearing rewrites the cached prefix, as a fold
-// does, so it is not worth doing for a little.
+// half of the budget, oldest first, and reports how many results it cleared,
+// how many replies' reasoning, and how many tokens that freed. It clears
+// nothing unless that frees at least an eighth of the budget: each clearing
+// rewrites the cached prefix, as a fold does, so it is not worth doing for a
+// little.
+//
+// Reasoning goes with the results because it is mostly about them: once the
+// output a step reasoned over is gone, the reasoning is a commentary on
+// nothing. It is cleared only where count sees it, which is where a request
+// would send it back.
 //
 // The protected tail is the same half-budget the fold keeps, so what the
 // current work is reading stays intact.
-func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) int, placeholder string) (int, int) {
+func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) int, placeholder string) (results, reasonings, freed int) {
 	protect := budget / 2
 	tail := 0
 	start := len(msgs)
@@ -64,10 +70,18 @@ func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) in
 
 	cleared := llm.TextContent(placeholder)
 	clearedTokens := count(llm.Message{Role: llm.RoleTool, Content: cleared})
-	var idx []int
-	freed := 0
+	var idx, thoughts []int
 	for i := range start {
 		m := msgs[i]
+		if m.Role == llm.RoleAssistant && m.Reasoning != "" {
+			bare := m
+			bare.Reasoning = ""
+			if gain := count(m) - count(bare); gain > 0 {
+				thoughts = append(thoughts, i)
+				freed += gain
+			}
+			continue
+		}
 		if m.Role != llm.RoleTool || strings.HasPrefix(m.Text(), clearedPrefix) {
 			continue
 		}
@@ -77,12 +91,15 @@ func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) in
 		}
 	}
 	if freed < budget/8 {
-		return 0, 0
+		return 0, 0, 0
 	}
 	for _, i := range idx {
 		msgs[i].Content = cleared
 	}
-	return len(idx), freed
+	for _, i := range thoughts {
+		msgs[i].Reasoning = ""
+	}
+	return len(idx), len(thoughts), freed
 }
 
 // pruneHistory clears old tool output from the settled history, says so, and
@@ -90,12 +107,19 @@ func pruneToolResults(msgs []llm.Message, budget int, count func(llm.Message) in
 func (c *Coder) pruneHistory(budget int) bool {
 	// A copy, so that a slice sharing the old backing array keeps its results.
 	msgs := slices.Clone(c.doneMessages)
-	n, freed := pruneToolResults(msgs, budget, c.msgTokens, c.clearedPlaceholder())
-	if n == 0 {
+	n, r, freed := pruneToolResults(msgs, budget, c.msgTokens, c.clearedPlaceholder())
+	if n+r == 0 {
 		return false
 	}
 	c.doneMessages = msgs
+	var what []string
+	if n > 0 {
+		what = append(what, render.Plural(n, "old tool result", "old tool results"))
+	}
+	if r > 0 {
+		what = append(what, "the reasoning of "+render.Plural(r, "old reply", "old replies"))
+	}
 	c.Out.Printf("Cleared %s from the chat history (about %d tokens); the calls are kept.",
-		render.Plural(n, "old tool result", "old tool results"), freed)
+		strings.Join(what, " and "), freed)
 	return c.historyTokens(c.doneMessages) <= budget
 }

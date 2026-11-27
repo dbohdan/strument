@@ -58,6 +58,7 @@ func (s *StreamStub) Send(ctx context.Context, req llm.Request) iter.Seq2[llm.St
 					Text:         ev.Text,
 					Usage:        ev.Usage,
 					FinishReason: ev.FinishReason,
+					Field:        ev.Field,
 				}, nil) {
 					return
 				}

@@ -29,6 +29,13 @@ type Message struct {
 	// unknown. For the harness only: no client sends it. It is how a request
 	// can say where the conversation passed from one model to another.
 	Model string `json:"-"`
+	// Reasoning is the model's reasoning for this reply, and ReasoningField
+	// the wire field it streamed on ("reasoning" or "reasoning_content"; ""
+	// when it came some other way, such as an inline tag). For the harness:
+	// a client sends it back only when the request asks for replay and the
+	// message is the requesting model's own.
+	Reasoning      string `json:"-"`
+	ReasoningField string `json:"-"`
 }
 
 // ToolCall is one function call the model requested. Arguments is the raw
@@ -75,6 +82,26 @@ func ToolResult(callID, text string) Message {
 
 // Text returns the message content flattened to a string.
 func (m Message) Text() string { return m.Content.String() }
+
+// The wire fields reasoning streams on in the chat-completions dialect.
+const (
+	ReasoningFieldReasoning = "reasoning"
+	ReasoningFieldContent   = "reasoning_content"
+)
+
+// ReplayedReasoning is the reasoning a replaying request for model sends back
+// with m: its own, if model wrote it and it came on a field that can carry it
+// back. The client sends it and the coder counts it, so both ask here.
+func (m Message) ReplayedReasoning(model string) string {
+	if m.Role != RoleAssistant || m.Model != model {
+		return ""
+	}
+	switch m.ReasoningField {
+	case ReasoningFieldReasoning, ReasoningFieldContent:
+		return m.Reasoning
+	}
+	return ""
+}
 
 // TextMessage builds a plain-text message.
 func TextMessage(role, text string) Message {
@@ -289,6 +316,9 @@ type StreamEvent struct {
 	Usage        *Usage         `json:"usage,omitempty"`
 	FinishReason string         `json:"finish_reason,omitempty"`
 	ToolCall     *ToolCallDelta `json:"tool_call,omitempty"`
+	// Field is the wire field a reasoning event arrived on, when the dialect
+	// has one to name.
+	Field string `json:"field,omitempty"`
 }
 
 // ToolCallDelta is a streamed fragment of a tool call. ID and Name arrive on

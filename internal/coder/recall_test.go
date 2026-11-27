@@ -254,7 +254,7 @@ func TestClearedPlaceholderFollowsRecall(t *testing.T) {
 		{Role: llm.RoleTool, Content: llm.TextContent(big)},
 		{Role: llm.RoleUser, Content: llm.TextContent(strings.Repeat("y", 400))},
 	}
-	n, _ := pruneToolResults(msgs, 1000, count, clearedToolResult)
+	n, _, _ := pruneToolResults(msgs, 1000, count, clearedToolResult)
 	if n != 1 || msgs[0].Text() != clearedToolResultRecall {
 		t.Errorf("cleared %d; a result already cleared under the other placeholder was rewritten: %q", n, msgs[0].Text())
 	}

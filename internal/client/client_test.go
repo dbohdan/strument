@@ -830,3 +830,79 @@ func TestContextLimitIsStated(t *testing.T) {
 		}
 	}
 }
+
+// Replayed reasoning goes back in the field it came on, only when the request
+// asks for it, and only on the requesting model's own messages: another
+// model's reasoning would be a stranger's thoughts presented as its own.
+func TestBuildBodyReplaysReasoning(t *testing.T) {
+	c := New(config.Provider{Adapter: config.AdapterOpenRouter})
+	msg := func(model, field string) llm.Message {
+		m := llm.TextMessage("assistant", "done")
+		m.Model, m.Reasoning, m.ReasoningField = model, "thought", field
+		return m
+	}
+	for _, tc := range []struct {
+		name          string
+		replay        bool
+		m             llm.Message
+		field, absent string
+	}{
+		{"reasoning field", true, msg("m", llm.ReasoningFieldReasoning), "reasoning", "reasoning_content"},
+		{"reasoning_content field", true, msg("m", llm.ReasoningFieldContent), "reasoning_content", "reasoning"},
+		{"off", false, msg("m", llm.ReasoningFieldReasoning), "", "reasoning"},
+		{"another model's", true, msg("other", llm.ReasoningFieldReasoning), "", "reasoning"},
+		{"no field", true, msg("m", ""), "", "reasoning_content"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := llm.Request{Model: "m", ReplayReasoning: tc.replay,
+				Messages: []llm.Message{llm.TextMessage("user", "go"), tc.m}}
+			raw, err := json.Marshal(c.BuildBody(req))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var body struct {
+				Messages []map[string]any `json:"messages"`
+			}
+			if err := json.Unmarshal(raw, &body); err != nil {
+				t.Fatal(err)
+			}
+			asst := body.Messages[1]
+			if tc.field != "" && asst[tc.field] != "thought" {
+				t.Errorf("%s = %v, want the reasoning", tc.field, asst[tc.field])
+			}
+			if tc.field == "" {
+				for _, k := range []string{"reasoning", "reasoning_content"} {
+					if _, ok := asst[k]; ok {
+						t.Errorf("%s sent: %v", k, asst)
+					}
+				}
+			}
+			if _, ok := asst[tc.absent]; ok && tc.absent != tc.field {
+				t.Errorf("%s sent as well: %v", tc.absent, asst)
+			}
+			if _, ok := body.Messages[0]["reasoning"]; ok {
+				t.Error("the user message carries reasoning")
+			}
+		})
+	}
+}
+
+// The parser names the field each reasoning chunk came on, which is what lets
+// the replay send it back on the same one.
+func TestParseSSENamesTheReasoningField(t *testing.T) {
+	stream := "data: {\"choices\":[{\"delta\":{\"reasoning\":\"a\"}}]}\n\n" +
+		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"b\"}}]}\n\n" +
+		"data: [DONE]\n\n"
+	var got []string
+	for ev, err := range ParseSSE(strings.NewReader(stream)) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ev.Kind == llm.EventReasoning {
+			got = append(got, ev.Text+":"+ev.Field)
+		}
+	}
+	if want := "a:reasoning b:reasoning_content"; strings.Join(got, " ") != want {
+		t.Errorf("reasoning events = %q, want %q", strings.Join(got, " "), want)
+	}
+}

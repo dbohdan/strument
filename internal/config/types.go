@@ -113,6 +113,15 @@ type Model struct {
 	// mimo-v2.5, glm-5.3-flash, deepseek-v4.1-flash, gpt-4.1-nano and
 	// gpt-5-nano restarted 3/3. Nothing about the adapter predicts which.
 	Prefill bool
+	// ReplayReasoning sends the model's reasoning back on each of its earlier
+	// replies, in the field it streamed on. Default false. Over a task of
+	// 110–300 commands it was what MiMo needed to solve it at all (7/8 with
+	// its reasoning against 1/8 without) and cut DeepSeek's commands by a
+	// quarter; on tasks of 5–14 requests it changed nothing but cost
+	// (doc/experiments/2026-11-preserved-reasoning). It is per model because
+	// some routes already keep reasoning on the server: Command Code's MiMo
+	// route re-inserts it by call ID, so there it adds nothing.
+	ReplayReasoning bool
 	// InputModalities names the content kinds this model accepts besides text,
 	// using the same strings as the llm.Block* kinds so a projection can look a
 	// block up directly. Empty means text only, which is the safe default: a

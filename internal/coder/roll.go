@@ -31,7 +31,7 @@ import (
 // exactly the history most worth compacting, so the budget that decides when
 // to compact must see it.
 func (c *Coder) msgTokens(m llm.Message) int {
-	n := c.Tokens.Count(m.Text())
+	n := c.Tokens.Count(m.Text()) + c.replayTokens(m)
 	for _, tc := range m.ToolCalls {
 		n += c.Tokens.Count(tc.Name) + c.Tokens.Count(tc.Arguments)
 	}
@@ -43,6 +43,16 @@ func (c *Coder) msgTokens(m llm.Message) int {
 		n += imageTokens(img, adapter)
 	}
 	return n
+}
+
+// replayTokens counts the reasoning a request sends back with m. Over a long
+// turn it adds up like the tool results do, so a budget that left it out would
+// fold late and send requests the provider refuses.
+func (c *Coder) replayTokens(m llm.Message) int {
+	if c.Model == nil || !c.Model.ReplayReasoning {
+		return 0
+	}
+	return c.Tokens.Count(m.ReplayedReasoning(c.Model.Slug))
 }
 
 // historyTokens is msgTokens summed over msgs.

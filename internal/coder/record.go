@@ -186,8 +186,9 @@ func (c *Coder) recordNewMessages() {
 		return
 	}
 	// Reasoning is per-send and overwritten by the next one, so it is emitted
-	// here or not at all. It is not part of any message: the assembler strips
-	// it, because it is not something to send back.
+	// here or not at all. It is recorded as its own row rather than on the
+	// message: a model with replay_reasoning carries it on the live message,
+	// but a restore does not send it back (MessagesFromRecords).
 	//
 	// It goes immediately before the assistant message it preceded, which is
 	// neither end of this flush. One flush can hold the user's turn, then the

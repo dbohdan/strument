@@ -128,6 +128,10 @@ type wireMessage struct {
 	Content    any            `json:"content"`
 	ToolCalls  []wireToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
+	// Replayed reasoning, in the field it streamed on. Providers stream it
+	// under one of two names, and the one a provider sent is the one it reads.
+	Reasoning        string `json:"reasoning,omitempty"`
+	ReasoningContent string `json:"reasoning_content,omitempty"`
 }
 
 // wireBlock is one content part. Only one payload is set, selected by Type.
@@ -303,6 +307,13 @@ func (c *Client) BuildBody(req llm.Request) map[string]any {
 				Type:     "function",
 				Function: wireToolFunction{Name: tc.Name, Arguments: tc.WireArguments()},
 			})
+		}
+		if r := m.ReplayedReasoning(req.Model); req.ReplayReasoning && r != "" {
+			if m.ReasoningField == llm.ReasoningFieldReasoning {
+				wm.Reasoning = r
+			} else {
+				wm.ReasoningContent = r
+			}
 		}
 		msgs[i] = wm
 	}

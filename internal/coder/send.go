@@ -209,6 +209,9 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 			}
 		case llm.EventReasoning:
 			c.stream.reasoning += ev.Text
+			if ev.Field != "" {
+				c.stream.reasoningField = ev.Field
+			}
 			c.Out.StreamReasoning(ev.Text)
 			if loops.Feed(loopdetect.Reasoning, ev.Text) != nil {
 				return resLooping, nil
@@ -403,6 +406,7 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	for {
 		c.stream.response = ""
 		c.stream.reasoning = ""
+		c.stream.reasoningField = ""
 		c.stream.toolCalls = nil
 		c.stream.toolCallIndex = map[int]int{}
 
@@ -489,6 +493,8 @@ func (c *Coder) sendMessage(ctx context.Context, inp string) (SendOutcome, strin
 	if answer != "" || len(c.stream.toolCalls) > 0 {
 		msg := llm.TextMessage("assistant", answer)
 		msg.Model = c.Model.Slug
+		msg.Reasoning = c.stream.reasoning
+		msg.ReasoningField = c.stream.reasoningField
 		if len(c.stream.toolCalls) > 0 {
 			fillToolCalls(c.stream.toolCalls, len(c.doneMessages)+len(c.curMessages))
 			msg.ToolCalls = c.stream.toolCalls
@@ -764,6 +770,7 @@ func (c *Coder) buildRequest(messages []llm.Message) llm.Request {
 		ExtraParams:     c.Model.RequestExtraParams(),
 		Headers:         c.Model.RequestHeaders(),
 		MaxTokens:       c.Model.MaxOutput,
+		ReplayReasoning: c.Model.ReplayReasoning,
 	}
 	// Whatever tools the session offers, offer them. A condition on the edit
 	// format once meant the old ask mode sent none at all. A model told to

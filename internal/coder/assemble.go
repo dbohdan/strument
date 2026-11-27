@@ -347,7 +347,7 @@ func (c *Coder) countTools() int {
 func (c *Coder) countMessages(msgs []llm.Message) int {
 	n := 0
 	for _, m := range msgs {
-		n += c.Tokens.Count(m.Text())
+		n += c.Tokens.Count(m.Text()) + c.replayTokens(m)
 		for _, tc := range m.ToolCalls {
 			n += c.Tokens.Count(tc.Name) + c.Tokens.Count(tc.Arguments)
 		}

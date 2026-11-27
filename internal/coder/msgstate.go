@@ -10,6 +10,9 @@ import (
 type streamState struct {
 	response  string // the reply so far
 	reasoning string
+	// reasoningField is the wire field the reasoning streamed on, "" when the
+	// dialect names none.
+	reasoningField string
 	// multi holds the earlier parts of a reply that hit the output limit and
 	// was continued, ahead of response.
 	multi string

@@ -63,9 +63,9 @@ type RestoreStats struct {
 //
 // Rows that are not messages are skipped. The turn rows are the transcript's
 // view of the same conversation and would duplicate it; the reasoning rows are
-// deliberately not sent back, which recordNewMessages already says — "it is
-// not part of any message: the assembler strips it, because it is not
-// something to send back".
+// not put back on their messages, so a restored conversation replays no
+// reasoning even to a model with replay_reasoning. The row does not say which
+// wire field the reasoning came on, and replay sends it back on that one.
 func MessagesFromRecords(records []record.Record) ([]llm.Message, RestoreStats) {
 	var out []llm.Message
 	var stats RestoreStats
