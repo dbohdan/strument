@@ -1,6 +1,10 @@
 package coder
 
-import "strings"
+import (
+	"path/filepath"
+	"regexp"
+	"strings"
+)
 
 // SandboxState is what the harness knows about its own confinement. The coder
 // does not apply the sandbox — that happens once, at startup, before any model
@@ -72,30 +76,81 @@ func (s SandboxState) deniedHint() string {
 		"tell the user, who can add a path to `sandbox_write`."
 }
 
-// looksDenied reports whether command output suggests the sandbox refused
-// something.
-//
-// Two patterns, not one, and the second is the reason this is a function
-// rather than a substring check. A denied *write* is EACCES and reads as
-// "permission denied". A denied *rename between directories* is EXDEV and
-// reads as "invalid cross-device link" — a live probe confirmed os.IsPermission
-// is false for it. That second one is both the likeliest breakage under this
-// policy and the one that looks least like a sandbox: a program seeing EXDEV
-// concludes it crossed a filesystem boundary, and mv(1) quietly falls back to
-// copying instead of reporting anything at all.
-func looksDenied(output string) bool {
+// looksRefused matches EACCES and EPERM, the way a denied write reads.
+func looksRefused(output string) bool {
 	lower := strings.ToLower(output)
-	for _, marker := range []string{
-		"permission denied",
-		"operation not permitted",
-		"invalid cross-device link",
-		"cross-device link",
-		"eacces",
-		"exdev",
-	} {
+	for _, marker := range []string{"permission denied", "operation not permitted", "eacces"} {
 		if strings.Contains(lower, marker) {
 			return true
 		}
 	}
 	return false
+}
+
+// looksCrossDevice matches EXDEV, the way a denied *rename between
+// directories* reads: "invalid cross-device link". A live probe confirmed
+// os.IsPermission is false for it. It is both the likeliest breakage under
+// this policy and the one that looks least like a sandbox: a program seeing
+// EXDEV concludes it crossed a filesystem boundary, and mv(1) quietly falls
+// back to copying instead of reporting anything at all.
+func looksCrossDevice(output string) bool {
+	lower := strings.ToLower(output)
+	return strings.Contains(lower, "cross-device link") || strings.Contains(lower, "exdev")
+}
+
+// mayHaveDenied reports whether a failed command's output could be the
+// sandbox refusing something.
+//
+// The sandbox refuses writes outside the writable roots and nothing else, so a
+// denial on a path it permits, or on one the ordinary file permissions already
+// refuse, is not its doing. The case that showed it: `cat /proc/<pid>/environ`
+// of a non-dumpable process, a read denied by the kernel's own rules, came back
+// telling the model that writes are confined, which is true and beside the
+// point. A line naming no absolute path still gets the hint, because nothing
+// can be ruled out, and so does EXDEV: Landlock refuses a rename between two
+// writable directories with it too.
+func (s SandboxState) mayHaveDenied(output string) bool {
+	for line := range strings.Lines(output) {
+		if looksCrossDevice(line) {
+			return true
+		}
+		if !looksRefused(line) {
+			continue
+		}
+		paths := absPaths(line)
+		if len(paths) == 0 {
+			return true
+		}
+		for _, p := range paths {
+			if !s.permits(p) && !dacRefusesWrite(p) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// permits reports whether path is under a writable root.
+func (s SandboxState) permits(path string) bool {
+	path = filepath.Clean(path)
+	for _, root := range s.Writable {
+		if path == root || strings.HasPrefix(path, strings.TrimSuffix(root, "/")+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// pathInLine finds absolute paths in an error line: after the start, a space,
+// a quote of any kind, or the "=" and "(" of strace-like output, up to the next
+// space, quote, colon or comma.
+var pathInLine = regexp.MustCompile("(?:^|[\\s'\"`‘’“”=(])(/[^\\s'\"`‘’“”:,;)]+)")
+
+func absPaths(line string) []string {
+	ms := pathInLine.FindAllStringSubmatch(line, -1)
+	out := make([]string, 0, len(ms))
+	for _, m := range ms {
+		out = append(out, strings.TrimRight(m[1], "."))
+	}
+	return out
 }

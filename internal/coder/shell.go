@@ -160,7 +160,7 @@ func (c *Coder) runShellCommand(ctx context.Context, command string, show shellS
 	// a coding model responds to by editing code. Naming the sandbox turns
 	// thrashing into a config change.
 	var notice string
-	if exitCode != 0 && c.Sandbox.Active && looksDenied(output) {
+	if exitCode != 0 && c.Sandbox.Active && c.Sandbox.mayHaveDenied(output) {
 		notice += c.Sandbox.deniedHint()
 	}
 	// Who stopped it, said in the output rather than only on screen, because

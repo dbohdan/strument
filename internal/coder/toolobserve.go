@@ -757,7 +757,7 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	case err != nil:
 		return -1, fmt.Sprintf("could not run %s: %v", strings.Join(ch.Argv, " "), err)
 	}
-	if exit != 0 && c.Sandbox.Active && looksDenied(string(out)) {
+	if exit != 0 && c.Sandbox.Active && c.Sandbox.mayHaveDenied(string(out)) {
 		return exit, string(out) + c.Sandbox.deniedHint()
 	}
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
