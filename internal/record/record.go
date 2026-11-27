@@ -86,6 +86,12 @@ type Record struct {
 	// because the whole point is that it is *not* the answer. A scorer that
 	// cannot tell them apart credits a model that worked the answer out and
 	// then failed to give it.
+	//
+	// Field is the wire field it streamed on ("reasoning" or
+	// "reasoning_content"), empty when the dialect names none. A restore
+	// needs it to replay the reasoning to a model with replay_reasoning,
+	// which sends it back on the field it came on.
+	Field string `json:"field,omitempty"`
 
 	// turn
 	//

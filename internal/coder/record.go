@@ -187,8 +187,9 @@ func (c *Coder) recordNewMessages() {
 	}
 	// Reasoning is per-send and overwritten by the next one, so it is emitted
 	// here or not at all. It is recorded as its own row rather than on the
-	// message: a model with replay_reasoning carries it on the live message,
-	// but a restore does not send it back (MessagesFromRecords).
+	// message, with the field it streamed on, which is what a restore needs to
+	// put it back on the message for a model that replays it
+	// (MessagesFromRecords).
 	//
 	// It goes immediately before the assistant message it preceded, which is
 	// neither end of this flush. One flush can hold the user's turn, then the
@@ -196,10 +197,10 @@ func (c *Coder) recordNewMessages() {
 	// reasoning first would put it ahead of the user message that prompted it,
 	// and emitting it last would put it after tool results it never saw. The
 	// log is a timeline or it is a pile.
-	pending := c.stream.reasoning
+	pending, field := c.stream.reasoning, c.stream.reasoningField
 	emitReasoning := func() {
 		if pending != "" {
-			c.record(record.Record{Type: record.KindReasoning, Text: pending})
+			c.record(record.Record{Type: record.KindReasoning, Text: pending, Field: field})
 			pending = ""
 		}
 	}

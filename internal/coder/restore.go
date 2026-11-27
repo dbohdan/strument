@@ -62,10 +62,10 @@ type RestoreStats struct {
 // cannot import this package anyway.
 //
 // Rows that are not messages are skipped. The turn rows are the transcript's
-// view of the same conversation and would duplicate it; the reasoning rows are
-// not put back on their messages, so a restored conversation replays no
-// reasoning even to a model with replay_reasoning. The row does not say which
-// wire field the reasoning came on, and replay sends it back on that one.
+// view of the same conversation and would duplicate it. A reasoning row goes
+// back on the assistant message it immediately precedes, with its field, so a
+// model with replay_reasoning gets it after a resume as it did before; one
+// that precedes anything else belonged to a send that produced no message.
 func MessagesFromRecords(records []record.Record) ([]llm.Message, RestoreStats) {
 	var out []llm.Message
 	var stats RestoreStats
@@ -87,9 +87,17 @@ func MessagesFromRecords(records []record.Record) ([]llm.Message, RestoreStats) 
 	// go in front of the result answering that call.
 	pruned := map[string]string{}
 
+	// The reasoning row in front of the next message, if that message is the
+	// assistant's.
+	var thought *record.Record
+
 	records = applyRewinds(records, &stats)
 	turnStart := 0
 	for i, r := range records {
+		if r.Type == record.KindReasoning {
+			thought = &records[i]
+			continue
+		}
 		if r.Type == record.KindTurn {
 			// A turn row closes the messages recorded since the previous one:
 			// the same grouping applyRewinds uses, so a turn restored here is
@@ -109,6 +117,8 @@ func MessagesFromRecords(records []record.Record) ([]llm.Message, RestoreStats) 
 		if r.Type != record.KindMessage {
 			continue
 		}
+		reasoning := thought
+		thought = nil
 		// A tool result answers the calls of the assistant message it
 		// follows, so the window closes at the next message that is not one.
 		if r.Role != llm.RoleTool {
@@ -151,6 +161,9 @@ func MessagesFromRecords(records []record.Record) ([]llm.Message, RestoreStats) 
 			// so a request can mark where the conversation changed hands
 			// (markModelSeams). Older rows name only the qualified model.
 			msg.Model = nextTurnModel(records, i)
+			if reasoning != nil {
+				msg.Reasoning, msg.ReasoningField = reasoning.Text, reasoning.Field
+			}
 			out = append(out, msg)
 
 		case llm.RoleTool:

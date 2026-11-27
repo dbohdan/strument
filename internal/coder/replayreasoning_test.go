@@ -2,11 +2,14 @@ package coder
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"dbohdan.com/strument/internal/fixture"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/record"
 )
 
 // reasoned is a turn that thinks on field before answering.
@@ -118,5 +121,82 @@ func TestPruneLeavesUnsentReasoning(t *testing.T) {
 	}
 	if _, r, _ := pruneToolResults(msgs, 3000, c.msgTokens, clearedToolResult); r != 0 {
 		t.Errorf("cleared %d replies' reasoning that no request sends", r)
+	}
+}
+
+// A resumed session replays as the live one did: each reasoning row goes back
+// on the assistant message it preceded, with its field, including the second
+// step of a turn that called a tool in between.
+func TestReplayReasoningSurvivesARestore(t *testing.T) {
+	c := testCoder(t)
+	c.Model.ReplayReasoning = true
+	if err := os.WriteFile(filepath.Join(c.Root, "notes.txt"), []byte("the code is 4719\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rec := &capture{}
+	c.Recorder = rec
+	c.Client = &fixture.StreamStub{Turns: []fixture.Turn{
+		{Events: []fixture.Event{
+			{Kind: string(llm.EventReasoning), Text: "plan: read the notes", Field: llm.ReasoningFieldContent},
+			{Kind: string(llm.EventToolCall), ToolIndex: 0, ToolID: "call_1", ToolName: "read", ToolArgs: `{"path": "notes.txt"}`},
+		}},
+		reasoned("the notes say 4719", llm.ReasoningFieldContent, "4719"),
+	}}
+	c.Run(context.Background(), "What is the code?")
+
+	restored, stats := MessagesFromRecords(rec.recs)
+	var live, back []string
+	for _, m := range c.doneMessages {
+		live = append(live, m.Role+":"+m.Reasoning+":"+m.ReasoningField)
+	}
+	for _, m := range restored {
+		back = append(back, m.Role+":"+m.Reasoning+":"+m.ReasoningField)
+	}
+	if strings.Join(back, "|") != strings.Join(live, "|") {
+		t.Fatalf("restored reasoning %q, live %q", back, live)
+	}
+	if !strings.Contains(strings.Join(live, "|"), "plan: read the notes") || !strings.Contains(strings.Join(live, "|"), "the notes say 4719") {
+		t.Fatalf("the live history is missing a step's reasoning: %q", live)
+	}
+
+	d := testCoder(t)
+	d.Model.ReplayReasoning = true
+	d.RestoreHistory(restored, stats.Turns)
+	var req llm.Request
+	d.Client = &fixture.StreamStub{
+		Turns: []fixture.Turn{answer("again")},
+		OnRequest: func(_ int, r llm.Request, _ *fixture.Request) error {
+			req = r
+			return nil
+		},
+	}
+	d.Run(context.Background(), "And again?")
+	var sent []string
+	for _, m := range req.Messages {
+		if r := m.ReplayedReasoning(req.Model); r != "" {
+			sent = append(sent, r)
+		}
+	}
+	if strings.Join(sent, "|") != "plan: read the notes|the notes say 4719" {
+		t.Errorf("after a restore the request replays %q", sent)
+	}
+}
+
+// A reasoning row from a send that produced no message does not attach to the
+// next assistant message, which a later send wrote with reasoning of its own.
+func TestAnOrphanReasoningRowIsNotRestored(t *testing.T) {
+	recs := []record.Record{
+		{Type: record.KindMessage, Role: llm.RoleUser, Text: "one"},
+		{Type: record.KindReasoning, Text: "interrupted thought", Field: llm.ReasoningFieldReasoning},
+		{Type: record.KindTurn, Model: "m"},
+		{Type: record.KindMessage, Role: llm.RoleUser, Text: "two"},
+		{Type: record.KindMessage, Role: llm.RoleAssistant, Text: "answer"},
+		{Type: record.KindTurn, Model: "m"},
+	}
+	msgs, _ := MessagesFromRecords(recs)
+	for _, m := range msgs {
+		if m.Reasoning != "" {
+			t.Errorf("%s message %q took reasoning %q", m.Role, m.Text(), m.Reasoning)
+		}
 	}
 }

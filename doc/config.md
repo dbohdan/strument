@@ -1811,8 +1811,10 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   The reasoning goes back only to the model that wrote it; after `/model`, the
   new model gets none of the old one's. It counts toward the context estimate,
   and when old tool results are cleared to make room, the reasoning of the
-  same older replies goes with them. A restored session replays none, and
-  reasoning a model writes in an inline tag (`reasoning_tag`) is not replayed.
+  same older replies goes with them. The session record keeps each reply's
+  reasoning and its field, so a resumed session replays it as the live one
+  did; records written before Strument kept the field replay none. Reasoning
+  a model writes in an inline tag (`reasoning_tag`) is not replayed.
   Only the chat-completions adapters (`openai`, `openrouter`, `opencode`)
   accept it: the Anthropic and Responses dialects carry reasoning back only as
   signed or encrypted provider items, which Strument does not keep, so the
