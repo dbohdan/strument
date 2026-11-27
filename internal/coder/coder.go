@@ -416,7 +416,11 @@ type PlatformInfo struct {
 	Platform string // e.g. "Ubuntu 24.04.5 LTS (x86_64)"; see osinfo.Describe
 	Date     string // YYYY-MM-DD
 	WorkDir  string // absolute path to the project root
-	InGit    bool
+	// LaunchDir is where the user started Strument, when that is not WorkDir:
+	// inside a repository the root moves up to the worktree's, and "the tests
+	// here" means the directory the user is in.
+	LaunchDir string
+	InGit     bool
 }
 
 // New builds a Coder with the defaults for script mode.

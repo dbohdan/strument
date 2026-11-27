@@ -39,9 +39,8 @@ Keep in mind these details about the user's platform and environment:
 - Operating system: Ubuntu 24.04.5 LTS (x86_64)
 - Shell: commands given to the bash tool run in Strument's built-in shell, which takes bash syntax on every platform. It is not the user's login shell.
 - Date Strument started: 2026-01-01 (the about tool gives the current date and time)
-- Working directory: /home/user/project
-- The user is operating inside a git repository
-- Git is available via the bash tool: git log, git diff, git status, etc.
+- Project root: /home/user/project (each bash command starts here)
+- The project is a git repository. Read its history and changes with git through the bash tool, and commit with the commit tool rather than git commit.
 - Model: example/model
 
 # Tools, in the order they are offered

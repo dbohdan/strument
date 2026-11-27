@@ -163,6 +163,7 @@ func (c *chatCmd) Run() error {
 	}
 
 	cdr := coder.New(root, model)
+	cdr.Platform.LaunchDir = launchDir(cwd, root)
 	cdr.Build = buildInfo()
 	cdr.Session = session
 	cdr.DryRun = c.DryRun
@@ -2148,4 +2149,21 @@ func watchExitSignals(cdr *coder.Coder, cleanup func()) func() {
 		}
 	}()
 	return func() { signal.Stop(ch); close(stop) }
+}
+
+// launchDir is where the user started Strument, for the model's facts, or ""
+// when that is the project root. Both are resolved first: git reports the
+// root's real path, and a working directory reached through a symlink (/tmp on
+// macOS) would otherwise read as somewhere else.
+func launchDir(cwd, root string) string {
+	if c, err := filepath.EvalSymlinks(cwd); err == nil {
+		cwd = c
+	}
+	if r, err := filepath.EvalSymlinks(root); err == nil {
+		root = r
+	}
+	if cwd == root {
+		return ""
+	}
+	return cwd
 }

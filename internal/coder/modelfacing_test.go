@@ -68,6 +68,7 @@ func modelFacingText(t *testing.T) string {
 	c.Platform = PlatformInfo{Platform: "Ubuntu 24.04.5 LTS (x86_64)",
 		Date: "2026-01-01", WorkDir: "/home/user/project", InGit: true}
 	c.SuggestShellCommands = true
+	c.Commits = true
 	c.Scrape = func(context.Context, string, webpage.Options) (string, error) { return "", nil }
 	c.Search = func(context.Context, string) (websearch.Results, error) { return websearch.Results{}, nil }
 	c.Consult = map[string]ConsultModel{"terra": {Model: terraModel(), Purpose: "documentation and user-facing prose"}}

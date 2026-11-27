@@ -181,15 +181,37 @@ func (c *Coder) factsText() string {
 	b.WriteString("- Date Strument started: " + c.Platform.Date +
 		" (the about tool gives the current date and time)\n")
 	if c.Platform.WorkDir != "" {
-		b.WriteString("- Working directory: " + c.Platform.WorkDir + "\n")
+		b.WriteString("- Project root: " + c.Platform.WorkDir)
+		if c.offersShell() {
+			b.WriteString(" (each bash command starts here)")
+		}
+		b.WriteString("\n")
+	}
+	if l := c.Platform.LaunchDir; l != "" && l != c.Platform.WorkDir {
+		// Relative when inside the project, which is the usual case and the
+		// one that says where in it the user is.
+		if rel, err := filepath.Rel(c.Platform.WorkDir, l); err == nil && filepath.IsLocal(rel) {
+			b.WriteString("- The user started Strument in " + filepath.ToSlash(rel) + ", inside the project\n")
+		} else {
+			b.WriteString("- The user started Strument in " + l + "\n")
+		}
 	}
 	if c.Platform.InGit {
-		b.WriteString("- The user is operating inside a git repository\n")
-		// Only with the tool to run it: a model told about a tool it does not
-		// have may call it (doc/experiments/2026-09-tool-disclosure, arm C).
-		if c.offersShell() {
-			b.WriteString("- Git is available via the bash tool: git log, git diff, git status, etc.\n")
+		// The tools to use rather than the git commands every model knows,
+		// and only the ones this session has: a model told about a tool it
+		// does not have may call it (doc/experiments/2026-09-tool-disclosure,
+		// arm C). The commit tool is always offered, but declines when
+		// commits are off, so it is named only when they are on.
+		line := "- The project is a git repository."
+		switch {
+		case c.offersShell() && c.Commits:
+			line += " Read its history and changes with git through the bash tool, and commit with the commit tool rather than git commit."
+		case c.offersShell():
+			line += " Read its history and changes with git through the bash tool. Commits are off for this session."
+		case c.Commits:
+			line += " Commit with the commit tool."
 		}
+		b.WriteString(line + "\n")
 	}
 	// The model's own name, as the provider calls it. A model asked what it
 	// is otherwise answers from training, which names an older model or the
