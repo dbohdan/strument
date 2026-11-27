@@ -839,6 +839,17 @@ What this changes:
 - **Delivery is a property of the route on the day.** It is not a fact about
   the model. Before relying on the setting, measure it with `strip.py`.
 
+**The model takes it; one backend does not.** `data/checks/strip_or.py` runs
+the same check over OpenRouter, pinning one upstream provider per run
+(`allow_fallbacks = false`), since OpenRouter otherwise picks a provider per
+request. Of the 12 DeepSeek V4 Flash endpoints the account could reach, 11
+added all 85 tokens in both fields, mid-turn and after a new user message.
+Wafer (`wafer/mxfp4`) added none, the same as Command Code's route
+(`data/checks/strip-or-2026-11-27.txt`). DeepSeek's own API was not among
+them: it trains on inputs, and the account excludes providers that do. So
+Command Code most likely moved DeepSeek to a backend that discards replayed
+reasoning. Wafer behaving the same way does not show it is the same backend.
+
 ## Files, phase 4
 
 - `data/facility.py`: the world, its self-check and the robot client.

@@ -1808,10 +1808,14 @@ Describes one usable model. Returns a model value to place in the `models` dict.
   server and put it back themselves: Command Code's MiMo route does, matching
   it by tool-call id, so there this setting adds nothing. Others discard
   what is sent: Command Code's DeepSeek route took it on 2026-11-26 and
-  dropped it on 2026-11-27. To check a route, send the same request with and
-  without an assistant message's `reasoning_content` and compare the prompt
-  token counts; [`strip.py`](experiments/2026-11-preserved-reasoning/data/checks/strip.py)
-  does this.
+  dropped it on 2026-11-27. On OpenRouter the route is the upstream provider:
+  on 2026-11-27, 11 of 12 DeepSeek V4 Flash providers took it and Wafer did
+  not, so a provider can be left out with
+  `extra_params = {"provider": {"ignore": ["wafer"]}}`. To check a route,
+  send the same request with and without an assistant message's
+  `reasoning_content` and compare the prompt token counts;
+  [`strip.py`](experiments/2026-11-preserved-reasoning/data/checks/strip.py)
+  does this, and `strip_or.py` beside it does it per OpenRouter provider.
 
   The reasoning goes back only to the model that wrote it; after `/model`, the
   new model gets none of the old one's. It counts toward the context estimate,

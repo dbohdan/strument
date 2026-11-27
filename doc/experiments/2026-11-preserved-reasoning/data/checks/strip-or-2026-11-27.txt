@@ -1,0 +1,24 @@
+deepseek/deepseek-v4-flash   relace/fp4     served=Relace         reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   relace/fp4     served=Relace         reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   streamlake/fp8 served=StreamLake     reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   streamlake/fp8 served=StreamLake     reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   baidu/fp8      served=Baidu          reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   baidu/fp8      served=Baidu          reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   fireworks      served=Fireworks      reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   fireworks      served=Fireworks      reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   deepinfra/fp8  served=DeepInfra      reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   deepinfra/fp8  served=DeepInfra      reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   wafer/mxfp4    served=Wafer          reasoning_content  mid-turn=+0  after a new user turn=+0
+deepseek/deepseek-v4-flash   wafer/mxfp4    served=Wafer          reasoning          mid-turn=+0  after a new user turn=+0
+deepseek/deepseek-v4-flash   siliconflow/fp8 served=SiliconFlow    reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   siliconflow/fp8 served=SiliconFlow    reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   venice         served=Venice         reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   venice         served=Venice         reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   featherless/fp8 served=Featherless    reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   featherless/fp8 served=Featherless    reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   parasail/fp8   served=Parasail       reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   parasail/fp8   served=Parasail       reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   mancer/fp8     served=Mancer 2       reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   mancer/fp8     served=Mancer 2       reasoning          mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   azure/us       served=Azure          reasoning_content  mid-turn=+85  after a new user turn=+85
+deepseek/deepseek-v4-flash   azure/us       served=Azure          reasoning          mid-turn=+85  after a new user turn=+85
