@@ -65,7 +65,7 @@ func modelFacingText(t *testing.T) string {
 	root := t.TempDir()
 	c := New(root, &config.Model{Provider: config.Provider{Adapter: config.AdapterOpenRouter}, Slug: "example/model"})
 	c.Out = testOutput{t}
-	c.Platform = PlatformInfo{Platform: "Linux-6.1-x86_64",
+	c.Platform = PlatformInfo{Platform: "Ubuntu 24.04.5 LTS (x86_64)",
 		Date: "2026-01-01", WorkDir: "/home/user/project", InGit: true}
 	c.SuggestShellCommands = true
 	c.Scrape = func(context.Context, string, webpage.Options) (string, error) { return "", nil }

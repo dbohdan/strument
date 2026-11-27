@@ -242,7 +242,7 @@ func TestSystemPromptReplacesTheInstructionsOnly(t *testing.T) {
 	if strings.Contains(all, "# Editing rules") {
 		t.Errorf("the built-in survived its replacement:\n%s", all)
 	}
-	if !strings.Contains(all, "- Platform: ") || !strings.Contains(all, "- Model: "+c.Model.Slug) {
+	if !strings.Contains(all, "- Operating system: ") || !strings.Contains(all, "- Model: "+c.Model.Slug) {
 		t.Errorf("the facts did not follow the replacement:\n%s", all)
 	}
 

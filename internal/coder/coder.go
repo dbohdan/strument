@@ -15,6 +15,7 @@ import (
 
 	"dbohdan.com/strument/internal/config"
 	"dbohdan.com/strument/internal/llm"
+	"dbohdan.com/strument/internal/osinfo"
 	"dbohdan.com/strument/internal/render"
 	"dbohdan.com/strument/internal/repomap"
 	"dbohdan.com/strument/internal/skill"
@@ -412,7 +413,7 @@ const (
 // PlatformInfo is the platform half of the system prompt's facts
 // (factsText), injectable for fixtures.
 type PlatformInfo struct {
-	Platform string // e.g. "Linux-6.1-x86_64"
+	Platform string // e.g. "Ubuntu 24.04.5 LTS (x86_64)"; see osinfo.Describe
 	Date     string // YYYY-MM-DD
 	WorkDir  string // absolute path to the project root
 	InGit    bool
@@ -464,7 +465,7 @@ func (c *Coder) syncParser(on bool) {
 
 func defaultPlatformInfo(c *Coder) PlatformInfo {
 	return PlatformInfo{
-		Platform: fmt.Sprintf("%s-%s", osName(), archName()),
+		Platform: osinfo.Describe(),
 		Date:     time.Now().Format("2006-01-02"),
 		WorkDir:  c.Root,
 	}

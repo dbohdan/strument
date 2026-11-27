@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 
@@ -162,7 +161,10 @@ func (ch *chatChunks) addConversationBreakpoints(lastOnly bool) {
 func (c *Coder) factsText() string {
 	var b strings.Builder
 	b.WriteString("Keep in mind these details about the user's platform and environment:\n")
-	b.WriteString("- Platform: " + c.Platform.Platform + "\n")
+	// The distribution or product and its version, not the build target: it
+	// decides apt or dnf, which sed -i, and which binaries to fetch, and WSL
+	// changes paths and line endings while reporting itself as Linux.
+	b.WriteString("- Operating system: " + c.Platform.Platform + "\n")
 	// What the bash tool runs, not $SHELL. The line used to give the user's
 	// login shell, which is never what a command runs in: on a fish user's
 	// machine it read "SHELL=/usr/bin/fish", and Qwen3.8 27B answered it with
@@ -362,6 +364,3 @@ func (c *Coder) countMessages(msgs []llm.Message) int {
 	}
 	return n
 }
-
-func osName() string   { return strings.ToTitle(runtime.GOOS[:1]) + runtime.GOOS[1:] }
-func archName() string { return runtime.GOARCH }
