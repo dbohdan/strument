@@ -850,6 +850,27 @@ them: it trains on inputs, and the account excludes providers that do. So
 Command Code most likely moved DeepSeek to a backend that discards replayed
 reasoning. Wafer behaving the same way does not show it is the same backend.
 
+**So that a session can testify for itself,** Strument's request rows now
+record `replayed`, the estimated replayed reasoning in each request, and
+`data/checks/replaydelivery.py` reads a record back. It fits each step's
+growth in the provider's prompt count against the growth in replayed
+reasoning, since fitting the totals fails: every step adds about a hundred
+tokens of template overhead the estimate does not see. It was validated on
+phase 4's MiMo records, with `replayed` reconstructed from their reasoning
+rows (`data/checks/replaydelivery_adapt.py`, output in
+`data/checks/replaydelivery-p4.txt`):
+
+| arm | the reasoning reached the model | discarded | undecided | delivered |
+| --- | --- | --- | --- | --- |
+| none (call IDs rewritten) | no | 8 | 0 | 0 |
+| route (the server re-inserts it) | yes | 0 | 6 | 2 |
+| replay (the client sends it) | yes | 0 | 6 | 2 |
+
+It catches a discarding route with intervals of ±0.01 over 57–273 steps and
+never mistook a delivering one for it, but it rarely certifies delivery, and
+on today's eight-step sessions it decided nothing. The 0.5 threshold was set
+before the validation and not tuned to it.
+
 ## Files, phase 4
 
 - `data/facility.py`: the world, its self-check and the robot client.

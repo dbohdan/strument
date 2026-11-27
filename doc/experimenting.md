@@ -45,6 +45,9 @@ Before spending on a run, ask these questions in order:
   transcript per model ([pin reasoning low](#pin-reasoning-low)). Defaults
   differ by model and change without notice, and they cost wall-clock.
 - **Did the mechanism fire?** Instrument it and confirm it in the pilot ([the mechanism must fire](#mechanism-must-fire)).
+- **Will you know the channel held during the run, not only the day before?**
+  Probe it immediately before and after each window, and record what each
+  request sent through it ([the route is weather](#route-is-weather)).
 - **Did the model use the thing being tested?** A feature that can be declined
   was offered, not applied ([a clean null has many causes](#clean-null)).
 - **Could the fixture produce the failure being measured?** Put the relevant
@@ -101,6 +104,7 @@ Before spending on a run, ask these questions in order:
 | A column counts something other than its name | [a probe with two correct answers](#probe-with-two-answers), [a metric that counts the wrong thing](#clean-null) |
 | A classifier's answer ignores part of its input | [input longer than the window](#longer-than-window) |
 | The key disagrees with what the planted code does | [a plant must change the answer](#plant-changes-behavior), [a probe with two correct answers](#probe-with-two-answers) |
+| A provider accepts a field and the result says it did nothing | [the route is weather](#route-is-weather), then [the mechanism must fire](#mechanism-must-fire) |
 
 ---
 
@@ -1412,6 +1416,57 @@ a busy one look the same until you ask which hop answered.
 This is the same failure as [a cut-short turn](#cut-short-turn), from the
 other side. There, a turn that gave up looked like a finished one. Here, a
 run that never stopped waiting looked like a slow one.
+
+<a id="route-is-weather"></a>
+
+## 32. The route is weather: check the channel inside the run window
+
+Replayed reasoning reached DeepSeek V4 Flash through Command Code on
+2026-11-26: a planted 85-token thought added 84 tokens to the prompt count,
+mid-turn and after a new user message. The phase 4 trial of
+[`2026-11-preserved-reasoning`](experiments/2026-11-preserved-reasoning/)
+ran its DeepSeek sessions that day and found replay helped. On 2026-11-27 the
+same script, unchanged, measured 0 for DeepSeek, while MiMo and Kimi through
+the same API and key still took all 85. The request had not changed; the
+backend behind the route had. Over OpenRouter, 11 of 12 DeepSeek providers
+took the thought and one, Wafer, dropped it the same way, so a backend that
+discards the field is an ordinary thing to land on.
+
+The provider accepted the field throughout. Nothing errored, nothing in the
+response changed, and the session ran exactly as one with replay off would. A
+trial running that night would have compared two identical arms and reported a
+null — and the session records could not have said otherwise, because they
+did not record what the mechanism had sent: the DeepSeek sessions' delivery
+rests on a probe from the same day, not on their own evidence.
+
+This is not [pinning the provider](#pin-the-provider). Pinning fixes which
+endpoint OpenRouter picks. Behind a gateway that does not expose its backends,
+there is nothing to pin, and a pinned endpoint can change what it runs too.
+
+- **Do:** run the paired probe (the same request with and without the planted
+  content, prompt counts compared) immediately before and immediately after
+  each run window, and store its output beside the scores. A probe the day
+  before covers the day before. `data/checks/strip.py` and `strip_or.py` in
+  the preserved-reasoning experiment do this in seconds for a few cents.
+- **Do:** record per request what the mechanism sent, so each session can
+  testify for itself. Strument's request rows carry `replayed`, the estimated
+  replayed reasoning, beside `sent` and `estimated`;
+  `data/checks/replaydelivery.py` fits the growth of `sent` between steps
+  against it. Validated on phase 4's MiMo sessions (110–300 steps each), it
+  called all 8 sessions whose reasoning never reached the model "discarded",
+  with intervals of ±0.01, and called none of the 16 delivered ones
+  "discarded" — though only 4 of those 16 came out "delivered", the rest
+  undecided. Read it as a detector of loss over a long session, not as a
+  certificate of delivery, and not for sessions of a few steps.
+- **Check:** if the channel stopped carrying the treatment halfway through the
+  window, which file would show it?
+- **Tell:** a treatment arm whose cost or prompt counts are indistinguishable
+  from the baseline's, when the treatment adds content. Replayed reasoning
+  that reaches the model raises the prompt; one that does not leaves it where
+  the baseline is.
+
+This is [the mechanism must fire](#mechanism-must-fire) with time added: the
+mechanism fired in the pilot, and the pilot is not the run.
 
 ---
 
