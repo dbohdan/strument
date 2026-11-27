@@ -1188,9 +1188,9 @@ Credential variables may be included explicitly. Add them only when the command
 needs them.
 
 The allowlist keeps credentials out of tool results, not out of reach: a
-command can still read the environment Strument started with from
-`/proc/<pid>/environ`. See [the environment
-allowlist](security.md#the-environment-allowlist).
+command can still read the environment other processes running as you started
+with from `/proc/<pid>/environ`. On Linux, Strument's own is closed to it. See
+[the environment allowlist](security.md#the-environment-allowlist).
 
 For ad-hoc, session-scoped changes the REPL has `/env`: `/env` shows the
 effective allowlist by origin (defaults, config, session changes), `/env add`

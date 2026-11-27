@@ -1989,7 +1989,12 @@ func applyEgressConfig(cdr *coder.Coder, cfg *config.Config) {
 }
 
 func main() {
-	// First, so that --version, the user agent and the about tool agree.
+	// Before anything the model can cause: see undumpable. A failure leaves the
+	// process as readable as any other, which is how it ran before, so it is
+	// not worth refusing to start over.
+	_ = undumpable()
+
+	// So that --version, the user agent and the about tool agree.
 	version = resolvedVersion()
 
 	// Before any request can go out: providers that ask callers to identify

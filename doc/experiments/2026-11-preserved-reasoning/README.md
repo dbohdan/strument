@@ -616,7 +616,9 @@ a neighbour's port.
 One exposure stays, and it is Strument's, not the fixture's: the bash tool runs
 as the same user as Strument, so `/proc/$PPID/environ` holds the API key that
 the environment allowlist keeps out of bash's own environment. The archives
-are checked for keys before they are published.
+are checked for keys before they are published. (After the trial, Strument
+began marking itself non-dumpable on Linux, which closes its own `environ`;
+the runner's shell, started with the key, would still hold it.)
 
 ### Counts
 

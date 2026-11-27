@@ -22,6 +22,10 @@ import (
 var builtBinary string
 
 func TestMain(m *testing.M) {
+	// TestUndumpable's child runs one in-process test and needs no binary.
+	if os.Getenv("STRUMENT_TEST_UNDUMPABLE") == "1" {
+		os.Exit(m.Run())
+	}
 	dir, err := os.MkdirTemp("", "strument-cli-test")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "test setup:", err)

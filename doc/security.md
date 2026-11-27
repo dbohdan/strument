@@ -321,14 +321,29 @@ confine](#what-landlock-does-not-confine-the-display-server).
 **The allowlist keeps secrets out of tool results, not out of reach.** It
 decides what a command's environment holds, so a careless `env` or a test that
 prints its environment leaks nothing. A command that goes looking can still
-read `/proc/<pid>/environ` of any process running as you, Strument's included:
-the same user may read it, and the sandbox allows reading everywhere. That file
-holds the environment a process *started* with. So a variable exported in the
-shell that launched Strument, such as `OPENROUTER_API_KEY`, is readable there,
-while a value [`env_set`](config.md#env_set) applied after startup is not,
-except in the `/proc` of `git` and `/run` processes while they run. A live
-session confirmed both halves. Keeping a credential from a deliberate model
-means keeping it out of the user's processes altogether.
+read `/proc/<pid>/environ` of other processes running as you: the same user
+may read it, and the sandbox allows reading everywhere. That file holds the
+environment a process *started* with.
+
+On Linux, Strument's own process is the exception. It marks itself
+non-dumpable at startup, which makes its `/proc` entries root's and stops a
+same-user process from attaching to it, so the keys Strument was started with
+are not readable from a command it runs. A contained probe showed the
+difference: before, a bash-tool command found the API key in Strument's
+`environ`; after, permission was denied and no readable `environ` held it. The flag is not inherited, because `execve` resets it, so the
+commands Strument runs are ordinary processes, and the cost is that Strument
+writes no core dump and a debugger has to launch it rather than attach. On
+other systems nothing changes.
+
+What it cannot cover is every other process that started with the key. The
+shell that launched Strument holds it only if it was itself started with it
+(an interactive `export` writes to the shell's variables, not to its
+`environ`), but a wrapper script that sets it and runs Strument does hold it,
+and so do Strument's own `git` processes while they run (below). A value
+[`env_set`](config.md#env_set) applied after startup is not in Strument's
+`environ` at all, but it is in the `/proc` of `git` and `/run` processes while
+they run. Keeping a credential from a deliberate model means keeping it out of
+the user's processes altogether.
 
 `/run` is exempt from the allowlist because the user typed the command. It is
 not exempt from the sandbox because the allowlist is a policy Strument chooses
