@@ -15,6 +15,9 @@
 // OpenCode asks for *.env and *.env.*; Pi, Codex, and DeepSeek Harness have no
 // such list. The defaults here are Kimi's, matched by path rather than by
 // basename prefix, plus the other files credentials are conventionally kept in.
+// By November Kimi Code refused rather than asked, and caught backup copies
+// (id_rsa.bak, credentials.old, …) that these patterns do not
+// (doc/experiments/2026-11-secrets-survey).
 package secretfile
 
 import (

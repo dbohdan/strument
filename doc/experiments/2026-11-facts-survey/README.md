@@ -31,7 +31,7 @@ the system prompt of the Claude Code session that did this survey.
 | date | yes, re-sent when it changes | — | date, timezone, re-sent when changed | in reminders, re-sent when it changes | a timestamp at every step, with the time elapsed since the last | at startup |
 | sandbox | a temp directory "approved for external access" | — | mode, writable roots, read-only entries, approval policy | "The environment is not a sandbox" | stated on denial, with an offer to retry wider | — |
 | network | — | — | allowed and denied domains | — | not found | — |
-| filtered environment | — | — | filters (`shell_environment_policy`), does not say so | — (a note that bash does not guard secret files) | describes the managed `DSH_*` variables it adds | — |
+| filtered environment | — | — | can filter (`shell_environment_policy`, opt-in), does not say so | — (a note that bash does not guard secret files) | describes the managed `DSH_*` variables it adds | — |
 | git | repository yes/no | — | — | up to 20 dirty files and recent commits | not found | repository yes/no |
 | updates | diffed and re-sent | sections diffed | diffed world state | reminders | every step | none seen |
 
@@ -45,9 +45,11 @@ search covered the context, shell and sandbox packages.
   and DeepSeek Harness, like Strument's hint, explains a denial after the
   fact. Strument's sandbox confines writes only, so the Codex shape, reduced
   to the writable roots, fits.
-- **The filtered environment:** nobody tells the model. Codex filters and
-  is silent, which is what Strument did. There is no precedent, and none
-  against it.
+- **The filtered environment:** nobody tells the model. Codex can filter
+  but by default passes everything, and DeepSeek Harness drops
+  credential-shaped names without saying so
+  ([the secrets survey](../2026-11-secrets-survey/)). There is no precedent,
+  and none against it.
 - **The operating system:** nobody names the distribution or version, and
   nobody detects WSL. Claude Code's kernel string is the closest. Strument's
   `osinfo` line is ahead of the panel here, not behind it.

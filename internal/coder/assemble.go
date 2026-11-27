@@ -174,8 +174,8 @@ func (c *Coder) factsText() string {
 		b.WriteString("- Shell: commands given to the bash tool run in Strument's built-in shell, " +
 			"which takes bash syntax on every platform. It is not the user's login shell.\n")
 		b.WriteString(c.sandboxFact())
-		// Codex filters a command's environment and says nothing, as Strument
-		// did (doc/experiments/2026-11-facts-survey). A model that does not
+		// No harness in the panel tells the model its commands' environment is
+		// filtered (doc/experiments/2026-11-facts-survey). A model that does not
 		// know runs curl with $GITHUB_TOKEN and debugs the 401; one that does
 		// asks the user.
 		b.WriteString("- Commands get a filtered environment: API keys and other credentials are " +
