@@ -92,3 +92,18 @@ func TestFactsStateTheSandbox(t *testing.T) {
 		t.Errorf("command facts without the bash tool:\n%s", f)
 	}
 }
+
+// Script mode, which has no Asker, says that questions go unanswered; a
+// session that can ask says nothing about it.
+func TestFactsSayWhenNoQuestionIsAnswered(t *testing.T) {
+	c := testCoder(t)
+	c.Platform = PlatformInfo{Platform: "Linux"}
+	c.Asker = nil
+	if f := c.factsText(); !strings.Contains(f, "questions to them will not be answered") {
+		t.Errorf("script mode:\n%s", f)
+	}
+	c.Asker = &stubAsker{}
+	if f := c.factsText(); strings.Contains(f, "one-shot") {
+		t.Errorf("an interactive session:\n%s", f)
+	}
+}

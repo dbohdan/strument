@@ -221,6 +221,15 @@ func (c *Coder) factsText() string {
 		}
 		b.WriteString(line + "\n")
 	}
+	// Script mode has no Asker. The prompt says to ask when a request is
+	// ambiguous, and a model that does gets "unavailable" back from the tool,
+	// or ends the run on a question nobody reads. Not "nobody is there":
+	// under -p with a terminal, the user may still be approving commands.
+	if c.Asker == nil {
+		b.WriteString("- This is a one-shot run (strument -p): the user gave one instruction, and " +
+			"questions to them will not be answered. Where the request is ambiguous, take the most " +
+			"reasonable reading, do the work, and say what you assumed.\n")
+	}
 	// The model's own name, as the provider calls it. A model asked what it
 	// is otherwise answers from training, which names an older model or the
 	// wrong vendor, and one switched in by /model reads an earlier model's
