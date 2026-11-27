@@ -261,6 +261,14 @@ type Record struct {
 	// Reasoning is the part of Received the provider counted as reasoning.
 	// Absent where the dialect has no split (Anthropic's).
 	Reasoning int `json:"reasoning,omitempty"`
+	// Replayed is the part of Estimated that is reasoning sent back to the
+	// model (replay_reasoning), in the same unscaled estimate. It is what lets
+	// a session say afterwards whether its route took that reasoning: where it
+	// did, Sent tracks Estimated; where it was discarded, Sent tracks
+	// Estimated minus Replayed. Routes change without notice (Command Code's
+	// DeepSeek route took it one day and dropped it the next), and a check
+	// made the day before a run does not cover the run.
+	Replayed int `json:"replayed,omitempty"`
 	// Provider is the upstream that served the request, where a router says
 	// (OpenRouter). With fallbacks allowed it is the only record of which
 	// provider a request went to, and providers differ in price, cache and

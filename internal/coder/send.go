@@ -170,12 +170,23 @@ func (c *Coder) streamOnce(ctx context.Context, call string, req llm.Request, us
 	// edits, asking the user — is outside it, so summing these across a turn
 	// gives model time rather than wall time.
 	started := c.Clock.Now()
+	// The record's estimate is of what this request sends. The budget's counts
+	// replay by the session's model, and an aside or a consult can carry the
+	// same history without asking for replay, or for another model.
 	estimated := c.requestTokens(req.Messages)
+	replayed := 0
+	for _, m := range req.Messages {
+		estimated -= c.replayTokens(m)
+		if req.ReplayReasoning {
+			replayed += c.Tokens.Count(m.ReplayedReasoning(req.Model))
+		}
+	}
+	estimated += replayed
 	defer func() {
 		elapsed := c.Clock.Now().Sub(started)
 		usage.modelTime += elapsed
 		c.usage.modelTime += elapsed
-		c.recordRequest(call, res, err, finishReason, got, sawUsage, elapsed, estimated)
+		c.recordRequest(call, res, err, finishReason, got, sawUsage, elapsed, estimated, replayed)
 	}()
 
 	for ev, err := range c.Client.Send(ctx, req) {

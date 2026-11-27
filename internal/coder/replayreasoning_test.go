@@ -200,3 +200,42 @@ func TestAnOrphanReasoningRowIsNotRestored(t *testing.T) {
 		}
 	}
 }
+
+// Each request row says how much of its estimate was replayed reasoning, which
+// is what lets a session be checked afterwards for a route that discarded it.
+func TestRequestRowsCountReplayedReasoning(t *testing.T) {
+	for _, replay := range []bool{false, true} {
+		c := testCoder(t)
+		c.Model.ReplayReasoning = replay
+		rec := &capture{}
+		c.Recorder = rec
+		usage := fixture.Event{Kind: string(llm.EventUsage), Usage: &llm.Usage{PromptTokens: 100, CompletionTokens: 5}}
+		first := reasoned("the map so far: A east of B", llm.ReasoningFieldReasoning, "first")
+		first.Events = append(first.Events, usage)
+		second := answer("second")
+		second.Events = append(second.Events, usage)
+		c.Client = &fixture.StreamStub{Turns: []fixture.Turn{first, second}}
+		c.Run(context.Background(), "one")
+		c.Run(context.Background(), "two")
+
+		var rows []record.Record
+		for _, r := range rec.recs {
+			if r.Type == record.KindRequest {
+				rows = append(rows, r)
+			}
+		}
+		if len(rows) != 2 {
+			t.Fatalf("replay %v: %d request rows, want 2", replay, len(rows))
+		}
+		want := 0
+		if replay {
+			want = c.Tokens.Count("the map so far: A east of B")
+		}
+		if rows[0].Replayed != 0 || rows[1].Replayed != want {
+			t.Errorf("replay %v: replayed = %d, %d; want 0, %d", replay, rows[0].Replayed, rows[1].Replayed, want)
+		}
+		if rows[1].Estimated <= rows[1].Replayed {
+			t.Errorf("replay %v: estimate %d does not contain the replayed %d", replay, rows[1].Estimated, rows[1].Replayed)
+		}
+	}
+}

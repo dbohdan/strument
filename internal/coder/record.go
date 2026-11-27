@@ -99,7 +99,7 @@ var streamOutcomes = map[streamResult]string{
 // a request that failed before usage arrived records no counts rather than
 // zeroes that look measured.
 func (c *Coder) recordRequest(call string, res streamResult, err error, finishReason string,
-	usage llm.Usage, sawUsage bool, elapsed time.Duration, estimated int,
+	usage llm.Usage, sawUsage bool, elapsed time.Duration, estimated, replayed int,
 ) {
 	if c.Recorder == nil {
 		return
@@ -121,6 +121,7 @@ func (c *Coder) recordRequest(call string, res streamResult, err error, finishRe
 	if sawUsage {
 		r.Sent = usage.PromptTokens
 		r.Estimated = estimated
+		r.Replayed = replayed
 		r.Received = usage.CompletionTokens
 		r.CacheRead = usage.CacheReadTokens
 		r.CacheWrite = usage.CacheWriteTokens
