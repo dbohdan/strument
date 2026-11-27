@@ -37,7 +37,7 @@ Use read, grep, glob, and ls to find what you need — or one run_code call that
 
 Keep in mind these details about the user's platform and environment:
 - Platform: Linux-6.1-x86_64
-- Shell: SHELL=/bin/bash
+- Shell: commands given to the bash tool run in Strument's built-in shell, which takes bash syntax on every platform. It is not the user's login shell.
 - Date Strument started: 2026-01-01 (the about tool gives the current date and time)
 - Working directory: /home/user/project
 - The user is operating inside a git repository

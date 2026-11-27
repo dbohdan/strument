@@ -163,7 +163,15 @@ func (c *Coder) factsText() string {
 	var b strings.Builder
 	b.WriteString("Keep in mind these details about the user's platform and environment:\n")
 	b.WriteString("- Platform: " + c.Platform.Platform + "\n")
-	b.WriteString("- Shell: " + c.Platform.ShellVar + "=" + c.Platform.ShellVal + "\n")
+	// What the bash tool runs, not $SHELL. The line used to give the user's
+	// login shell, which is never what a command runs in: on a fish user's
+	// machine it read "SHELL=/usr/bin/fish", and Qwen3.8 27B answered it with
+	// fish syntax and with commands wrapped in `bash -c`. Only with the tool,
+	// like the git line below.
+	if c.offersShell() {
+		b.WriteString("- Shell: commands given to the bash tool run in Strument's built-in shell, " +
+			"which takes bash syntax on every platform. It is not the user's login shell.\n")
+	}
 	// Not "Current date": the date is taken once, when Strument starts, so
 	// after midnight that label would be the false part. The
 	// date stays because a model without one assumes the year its training

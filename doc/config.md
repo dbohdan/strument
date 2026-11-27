@@ -1169,6 +1169,11 @@ model-run `env`, or a failing test that prints its environment, cannot carry
 `OPENROUTER_API_KEY` — or any other credential — into a tool result, the
 transcript, and the model's context.
 
+`SHELL` is withheld too, though it is no secret. Model-run commands run in
+Strument's built-in shell, which takes bash syntax whatever your login shell
+is, and a model shown `SHELL=/usr/bin/fish` writes fish. Most programs that
+read it fall back to `/bin/sh` without it; `env_allow = ["SHELL"]` passes it.
+
 What decides the filtering is who caused the command, not which command it is.
 Commands *you* type inherit your whole environment — `/run`, and `/check`,
 which runs the same named checks the model's `check` tool does but under your

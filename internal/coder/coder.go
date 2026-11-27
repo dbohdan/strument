@@ -413,8 +413,6 @@ const (
 // (factsText), injectable for fixtures.
 type PlatformInfo struct {
 	Platform string // e.g. "Linux-6.1-x86_64"
-	ShellVar string
-	ShellVal string
 	Date     string // YYYY-MM-DD
 	WorkDir  string // absolute path to the project root
 	InGit    bool
@@ -465,14 +463,8 @@ func (c *Coder) syncParser(on bool) {
 }
 
 func defaultPlatformInfo(c *Coder) PlatformInfo {
-	shellVar := "SHELL"
-	if os.PathSeparator == '\\' {
-		shellVar = "COMSPEC"
-	}
 	return PlatformInfo{
 		Platform: fmt.Sprintf("%s-%s", osName(), archName()),
-		ShellVar: shellVar,
-		ShellVal: os.Getenv(shellVar),
 		Date:     time.Now().Format("2006-01-02"),
 		WorkDir:  c.Root,
 	}

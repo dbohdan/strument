@@ -170,3 +170,14 @@ func envNames(pairs []string) []string {
 	}
 	return out
 }
+
+// SHELL names the user's login shell, which no model-run command runs in; a
+// fish user's value led a model to write fish. Withheld unless env_allow names it.
+func TestShellIsWithheldByDefault(t *testing.T) {
+	if Allowed("SHELL", nil) {
+		t.Error("SHELL passes the default allowlist")
+	}
+	if !Allowed("SHELL", []string{"SHELL"}) {
+		t.Error("env_allow cannot bring SHELL back")
+	}
+}

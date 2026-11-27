@@ -29,8 +29,12 @@ import (
 // /run is not model-run: the user typed the command, so it keeps the full
 // environment.
 var defaultNames = []string{
-	// Identity, shell, terminal.
-	"PATH", "HOME", "SHELL", "USER", "LOGNAME", "TERM", "TERMINFO",
+	// Identity and terminal. Not SHELL: model-run commands run in Strument's
+	// built-in shell, whatever the user's login shell is, and a fish user's
+	// SHELL told models to write fish (Qwen3.8 27B did, and wrapped commands
+	// in `bash -c` to escape it). Most programs that read it fall back to
+	// /bin/sh without it; env_allow brings it back.
+	"PATH", "HOME", "USER", "LOGNAME", "TERM", "TERMINFO",
 	"COLUMNS", "LINES", "TMPDIR",
 	// PWD, the directory a command runs in: path-shaped, not
 	// credential-shaped, and load-bearing — a suite reading it must see
