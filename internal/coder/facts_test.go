@@ -80,7 +80,8 @@ func TestFactsStateTheSandbox(t *testing.T) {
 		t.Errorf("no sandbox, yet:\n%s", f)
 	}
 	c.Sandbox = SandboxState{Required: true, Active: true, Writable: []string{"/home/u/proj", "/tmp", filepath.Join(home, ".cache")}}
-	if f := c.factsText(); !strings.Contains(f, "- Sandbox: commands can write only under /home/u/proj, /tmp, ~/.cache. Reading") {
+	cache := "~" + string(filepath.Separator) + ".cache" // the platform's separator, as the roots are written
+	if f := c.factsText(); !strings.Contains(f, "- Sandbox: commands can write only under /home/u/proj, /tmp, "+cache+". Reading") {
 		t.Errorf("active:\n%s", f)
 	}
 	c.Sandbox = SandboxState{Required: true, Unavailable: "no Landlock on this kernel: ENOSYS"}

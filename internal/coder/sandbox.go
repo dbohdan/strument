@@ -130,11 +130,16 @@ func (s SandboxState) mayHaveDenied(output string) bool {
 	return false
 }
 
-// permits reports whether path is under a writable root.
+// permits reports whether path is under a writable root. Both are cleaned
+// and compared with the platform's separator: Clean turns a Windows path's
+// slashes into backslashes, and a root compared as written then contains
+// nothing.
 func (s SandboxState) permits(path string) bool {
+	sep := string(filepath.Separator)
 	path = filepath.Clean(path)
 	for _, root := range s.Writable {
-		if path == root || strings.HasPrefix(path, strings.TrimSuffix(root, "/")+"/") {
+		root = filepath.Clean(root)
+		if path == root || strings.HasPrefix(path, strings.TrimSuffix(root, sep)+sep) {
 			return true
 		}
 	}
