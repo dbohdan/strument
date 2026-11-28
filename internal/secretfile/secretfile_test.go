@@ -83,3 +83,36 @@ func TestBadPatterns(t *testing.T) {
 		t.Error("a nil matcher matched")
 	}
 }
+
+// A copy of a secret file is as secret as the file, and a copy of an exempt
+// one as exempt; a suffix on a name that matches nothing changes nothing.
+func TestBackupCopies(t *testing.T) {
+	m, err := New("/home/u", []string{"deploy/token"}, []string{".env.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]bool{
+		"/home/u/proj/id_rsa.bak":          true,
+		"/home/u/backup/id_ed25519.orig":   true,
+		"/home/u/id_ecdsa.old":             true,
+		"/srv/keys/id_rsa.pem":             true,
+		"/home/u/.aws/credentials.bak":     true,
+		"/home/u/.netrc.old":               true,
+		"/home/u/proj/.npmrc.bak":          true,
+		"/home/u/proj/.npmrc~":             true,
+		"/home/u/id_rsa.old.bak":           true,
+		"/home/u/proj/deploy/token.save":   true, // a user's pattern too
+		"/home/u/.ssh/id_rsa.pub.bak":      false,
+		"/home/u/proj/id_ed25519.pub.orig": false,
+		"/home/u/proj/.env.example.bak":    false,
+		"/home/u/proj/.env.test.bak":       false, // the user's exemption
+		"/home/u/proj/server.key":          false,
+		"/home/u/proj/notes.bak":           false,
+		"/home/u/proj/.bak":                false,
+		"/home/u/proj/~":                   false,
+	} {
+		if _, got := m.Match(path); got != want {
+			t.Errorf("Match(%q) = %v, want %v", path, got, want)
+		}
+	}
+}

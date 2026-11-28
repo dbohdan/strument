@@ -77,6 +77,15 @@ var DefaultExempt = []string{
 	"*.pub",
 }
 
+// BackupSuffixes are the endings a copy of a secret file is left with: by
+// hand (id_rsa.bak, credentials.old), by an editor (.orig, .save, a trailing
+// ~), or by converting a key (id_rsa.pem). Kimi Code's list, plus "~", which
+// is not dot-separated. A path ending in one is judged as the name without it,
+// repeatedly, so id_rsa.old.bak is id_rsa.
+var BackupSuffixes = []string{
+	".bak", ".backup", ".copy", ".disabled", ".key", ".old", ".orig", ".pem", ".save", ".tmp", "~",
+}
+
 // Matcher reports whether a path is secret-shaped. The zero value and nil
 // match nothing.
 type Matcher struct {
@@ -159,6 +168,12 @@ func compile(home, text string) (rule, error) {
 
 // Match reports the pattern an absolute path matches, or ok false. A path an
 // exemption matches is not secret whatever else it matches.
+//
+// A copy is judged as its original: the name is matched again with each
+// backup suffix taken off (see BackupSuffixes), and an exemption of any of
+// those names holds, so ~/.ssh/id_rsa.pub.bak is a public key and
+// .env.example.bak a template. The copy itself can be exempted by its own
+// name.
 func (m *Matcher) Match(abs string) (pattern string, ok bool) {
 	if m == nil {
 		return "", false
@@ -167,17 +182,42 @@ func (m *Matcher) Match(abs string) (pattern string, ok bool) {
 	if len(parts) == 0 {
 		return "", false
 	}
-	for _, r := range m.exempt {
-		if r.p.Match(parts, false) == gitignore.Exclude {
-			return "", false
+	forms := [][]string{parts}
+	for last := parts[len(parts)-1]; ; {
+		base := stripBackup(last)
+		if base == last {
+			break
+		}
+		forms = append(forms, append(parts[:len(parts)-1:len(parts)-1], base))
+		last = base
+	}
+	for _, f := range forms {
+		for _, r := range m.exempt {
+			if r.p.Match(f, false) == gitignore.Exclude {
+				return "", false
+			}
 		}
 	}
-	for _, r := range m.deny {
-		if r.p.Match(parts, false) == gitignore.Exclude {
-			return r.text, true
+	for _, f := range forms {
+		for _, r := range m.deny {
+			if r.p.Match(f, false) == gitignore.Exclude {
+				return r.text, true
+			}
 		}
 	}
 	return "", false
+}
+
+// stripBackup takes one backup suffix off a file name, or returns it as it
+// is. A name that would be left empty or a bare dot keeps its suffix: ".bak"
+// is a file called .bak, not a copy of nothing.
+func stripBackup(name string) string {
+	for _, s := range BackupSuffixes {
+		if base, ok := strings.CutSuffix(name, s); ok && base != "" && base != "." {
+			return base
+		}
+	}
+	return name
 }
 
 // components splits an absolute path for the matcher, relative to the

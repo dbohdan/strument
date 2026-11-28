@@ -1126,6 +1126,12 @@ The built-in patterns are in `internal/secretfile/secretfile.go`. They cover
 `.kube/config`, `.config/gh/hosts.yml`, Cargo and Terraform credentials,
 `.gnupg/`, `.password-store/`, and `.local/share/keyrings/`.
 
+A copy is judged as its original. A name ending in `.bak`, `.backup`, `.copy`,
+`.disabled`, `.key`, `.old`, `.orig`, `.pem`, `.save`, `.tmp` or `~` is matched
+again without it, so `id_rsa.bak`, `id_rsa.pem` and `.aws/credentials.old` are
+secret, and `id_rsa.pub.bak` and `.env.example.bak` are not. This holds for
+your own patterns too.
+
 The two settings adjust that list:
 
 ```python
