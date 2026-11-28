@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"dbohdan.com/strument/internal/envallow"
+	"dbohdan.com/strument/internal/llm"
 	"dbohdan.com/strument/internal/render"
 	"mvdan.cc/sh/v3/expand"
 	"mvdan.cc/sh/v3/interp"
@@ -403,6 +404,12 @@ const execKillTimeout = 2 * time.Second
 //
 // The one divergence from a real shell: a block that unexports or unsets PWD
 // still hands its children one. Nothing a model writes does that on purpose.
+// orphanWaitDelay is how long a command's output is waited for after the
+// command's own process has exited or been killed. Long enough for its last
+// writes to drain; short, because anything still writing then is a process it
+// left behind.
+const orphanWaitDelay = 2 * time.Second
+
 func execWithPWD(ctx context.Context, args []string, job *oneJob) error {
 	hc := interp.HandlerCtx(ctx)
 	if ok, err := job.answer(hc, args[0], args[1:]); ok {
@@ -421,6 +428,13 @@ func execWithPWD(ctx context.Context, args []string, job *oneJob) error {
 		Stdin:  hc.Stdin,
 		Stdout: hc.Stdout,
 		Stderr: hc.Stderr,
+		// Without it Wait waits for every process holding the output, and a
+		// detached one holds it for as long as it runs: `bash -c 'cd d && setsid
+		// server >log 2>&1 &'` backgrounds the whole list, whose shell keeps the
+		// pipe while it waits on the server. That call reported "stopped after
+		// 1m0s by shell_timeout" and returned hours later, when the user killed
+		// the server; the timeout killed bash and could not end the wait.
+		WaitDelay: orphanWaitDelay,
 	}
 	err = cmd.Start()
 	if err == nil {
@@ -436,6 +450,13 @@ func execWithPWD(ctx context.Context, args []string, job *oneJob) error {
 		})
 		defer stop()
 		err = cmd.Wait()
+		if errors.Is(err, exec.ErrWaitDelay) {
+			// The command itself succeeded; what is left is a process it started.
+			fmt.Fprintf(hc.Stderr, "\n%s A process this command started outlived it and still holds its output, "+
+				"so Strument stopped waiting for it after %s. It may still be running; what it prints from now "+
+				"on is not shown here.\n", llm.HarnessMarker, orphanWaitDelay)
+			err = nil
+		}
 	}
 	var exitErr *exec.ExitError
 	var startErr *exec.Error

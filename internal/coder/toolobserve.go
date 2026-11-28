@@ -748,7 +748,13 @@ func (c *Coder) runCheck(ctx context.Context, ch config.Check) (int, string) {
 	// model as a tool result. So checks run under the same allowlist as the
 	// bash tool, rather than inheriting the session's credentials.
 	cmd.Env = envallow.Filter(nil, c.EnvAllow)
+	// A suite that leaves a server running would otherwise hold the output,
+	// and the check, past its deadline (see execWithPWD).
+	cmd.WaitDelay = orphanWaitDelay
 	out, err := cmd.CombinedOutput()
+	if errors.Is(err, exec.ErrWaitDelay) {
+		err = nil
+	}
 	exit := 0
 	var ee *exec.ExitError
 	switch {

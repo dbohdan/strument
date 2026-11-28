@@ -486,8 +486,15 @@ func NewCommand(argv []string, timeout time.Duration, envAllow func() []string) 
 		stderr := &boundedBuffer{max: 4096}
 		cmd.Stdout = stdout
 		cmd.Stderr = stderr
+		// A browser can leave a helper holding stdout after the scraper exits,
+		// and Run would wait on it past the timeout. What arrived by then is
+		// the page.
+		cmd.WaitDelay = 2 * time.Second
 
 		err := cmd.Run()
+		if errors.Is(err, exec.ErrWaitDelay) {
+			err = nil
+		}
 		if runCtx.Err() == context.DeadlineExceeded {
 			return "", fmt.Errorf("scraper command timed out after %s", timeout)
 		}
